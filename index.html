@@ -917,8 +917,13 @@ function ibisGoogleEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&
 function ibisGoogleCleanName(v){try{return cleanICSStudentName(String(v||''));}catch(_){return String(v||'').replace(/\s*-\s*Preply lesson\s*$/i,'').trim();}}
 function ibisGoogleEventParts(ev,timezone){const st=ev?.start||{};if(st.date)return {date:String(st.date),time:'',allDay:true};if(!st.dateTime)return {date:'',time:'',allDay:false};const d=new Date(st.dateTime);if(Number.isNaN(d.getTime()))return {date:'',time:'',allDay:false};try{const parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).reduce((a,p)=>(a[p.type]=p.value,a),{});return {date:parts.year+'-'+parts.month+'-'+parts.day,time:parts.hour+':'+parts.minute,allDay:false};}catch(_){return {date:d.toISOString().slice(0,10),time:d.toISOString().slice(11,16),allDay:false};}}
 function ibisGoogleCompare(){
- const box=document.getElementById('googleCalCompareBox');if(!box)return;
+ const box=document.getElementById('googleCalCompareBox');
+ if(!box){alert('IBIS Calendar comparison panel is missing from this page.');return;}
+ box.innerHTML='<div class="alert">Starting comparison…</div>';
+ ibisGoogleStatus('Comparing calendar events with IBIS records…');
+ try {
  if(!Array.isArray(ibisGoogleLastEvents)){box.innerHTML='<div class="alert">Run Preview events first.</div>';return;}
+ if(ibisGoogleLastEvents.length===0){box.innerHTML='<div class="alert">No preview events are available. Click Preview events and wait for it to finish, then try again.</div>';ibisGoogleStatus('No events available to compare');return;}
  const cal=ibisGoogleCalendars.find(c=>c.id===document.getElementById('googleCalSelect')?.value)||{};
  const ics=Array.isArray(state.icsEvents)?state.icsEvents:[];
  const workspaces=Object.values(state.lessonWorkspaces||{});
@@ -944,6 +949,14 @@ function ibisGoogleCompare(){
  const statHtml='<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin:12px 0">'+stats.map(([l,n])=>'<div class="stat"><div class="label">'+ibisGoogleEsc(l)+'</div><div class="value">'+n+'</div></div>').join('')+'</div>';
  const rows=results.slice(0,200).map(r=>{const dateTime=(r.parts.date||'Date unknown')+(r.parts.time?' · '+r.parts.time:' · All day');return '<div class="metric" style="align-items:flex-start;gap:12px"><div style="min-width:155px"><strong>'+ibisGoogleEsc(dateTime)+'</strong><div class="small">'+ibisGoogleEsc(r.status)+'</div></div><div style="flex:1;min-width:160px"><strong>'+ibisGoogleEsc(r.name||r.ev.summary||'(Untitled event)')+'</strong><div class="small">'+ibisGoogleEsc(r.detail)+'</div></div></div>';}).join('');
  box.innerHTML='<div class="alert good"><strong>Read-only comparison complete.</strong> This is a matching report only: no events were imported, no lesson IDs were created or changed, and no preparation/history was modified.</div>'+statHtml+(results.length?rows:'<div class="empty">No events to compare. Run Preview events first.</div>')+(results.length>200?'<div class="small">Showing first 200 results.</div>':'')+'<div class="small" style="margin-top:10px">Matching policy: calendar UID / saved source identity first; exact name/date/time second; ambiguous date/name similarities are flagged for review, never silently merged. Events outside the preview window are not evaluated.</div>';
+
+ } catch(err) {
+   console.error('IBIS Calendar comparison failed:', err);
+   const message=ibisGoogleEsc(err&&err.message?err.message:String(err));
+   box.innerHTML='<div class="alert danger"><strong>Comparison could not complete.</strong><br>'+message+'<div class="small" style="margin-top:6px">No calendar events were imported and no lesson records were changed. Please send Alan this error text.</div></div>';
+   ibisGoogleStatus('Comparison failed');
+   ibisGoogleHelp('Comparison failed: '+(err&&err.message?err.message:String(err)));
+ }
 }
 function ibisGoogleDisconnect(){ibisGoogleAccessToken=null;ibisGoogleTokenClient=null;ibisGoogleCalendars=[];ibisGoogleLastEvents=[];const compareBtn=document.getElementById('googleCalCompareBtn');if(compareBtn)compareBtn.disabled=true;const compareBox=document.getElementById('googleCalCompareBox');if(compareBox)compareBox.innerHTML='';const sel=document.getElementById('googleCalSelect');if(sel){sel.innerHTML='<option value="">Connect to load calendars…</option>';sel.disabled=true;}const preview=document.getElementById('googleCalPreviewBtn');if(preview)preview.disabled=true;const box=document.getElementById('googleCalPreviewBox');if(box)box.innerHTML='';ibisGoogleStatus('Not connected');ibisGoogleHelp('Disconnected from this IBIS session. Your stored lesson records and selected calendar preference are unchanged.');}
 
