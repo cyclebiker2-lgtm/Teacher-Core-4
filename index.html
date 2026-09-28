@@ -989,8 +989,29 @@ function ibisGoogleApplySafeSync(){
    const ev=r.ev,uid=String(ev.iCalUID||''),gid=String(ev.id||'');
    const calendarRecord=(state.icsEvents||[]).find(x=>(uid&&String(x.uid||'')===uid)||(gid&&String(x.googleEventId||'')===gid));
    if(calendarRecord){if(r.kind==='changed'){const freshRecord=ibisGoogleBuildCalendarEvent(ev,{...cal,id:cal.id||state.googleCalendarId||''});calendarRecord.start=freshRecord.start;calendarRecord.end=freshRecord.end;calendarRecord.summary=freshRecord.summary;calendarRecord.description=freshRecord.description;calendarRecord.location=freshRecord.location;calendarRecord.status=freshRecord.status;calendarRecord.studentName=calendarRecord.studentName||freshRecord.studentName;calendarRecord.googleScheduleChangedAt=new Date().toISOString();}calendarRecord.googleEventId=gid;calendarRecord.googleICalUID=uid;calendarRecord.googleCalendarId=cal.id||state.googleCalendarId||'';calendarRecord.googleUpdated=ev.updated||calendarRecord.googleUpdated||null;calendarRecord.lastGoogleSyncAt=new Date().toISOString();linked++;}
-   const workspace=Object.values(state.lessonWorkspaces||{}).find(w=>(uid&&String(w.sourceRefs?.calendarUid||'')===uid)||(gid&&String(w.sourceRefs?.googleEventId||'')===gid));
-   if(workspace){workspace.sourceRefs=workspace.sourceRefs||{};if(uid)workspace.sourceRefs.calendarUid=uid;if(gid)workspace.sourceRefs.googleEventId=gid;workspace.sourceRefs.googleICalUID=uid;workspace.sourceRefs.googleCalendarId=cal.id||state.googleCalendarId||'';workspace.sourceRefs.googleUpdated=ev.updated||null;workspace.sourceRefs.lastGoogleSyncAt=new Date().toISOString();if(r.kind==='changed'){const oldStamp=String(workspace.date||'')+(workspace.time?'T'+workspace.time:'');const oldDate=new Date(oldStamp);const isFuture=!oldStamp||Number.isNaN(oldDate.getTime())||oldDate.getTime()>=Date.now();if(isFuture){const workspaceMap=state.lessonWorkspaces||{};const oldWorkspaceKey=Object.keys(workspaceMap).find(k=>workspaceMap[k]===workspace)||workspace.key||'';const newWorkspaceKey=lessonKey(workspace.name||r.name,r.parts.date,r.parts.time||'');workspace.date=r.parts.date;workspace.time=r.parts.time;workspace.key=newWorkspaceKey;workspace.sourceRefs.lastScheduleUpdateAt=new Date().toISOString();/* Re-key the same workspace object so preparation status lookup finds it at the new appointment. Preserve lessonId, preparedAt, prepMode, preplyStatus, materials, notes, reports and all evidence. */if(oldWorkspaceKey&&oldWorkspaceKey!==newWorkspaceKey)delete workspaceMap[oldWorkspaceKey];workspaceMap[newWorkspaceKey]=workspace;}else{workspace.sourceRefs.scheduleChangeNeedsReview=true;}}}
+   // Resolve the workspace through its saved source identity first. Older ICS-imported records
+   // may have the calendar UID on the ICS row but not yet on the workspace, so bridge via that row.
+   const workspaceMap=state.lessonWorkspaces||{};
+   let workspace=Object.values(workspaceMap).find(w=>(uid&&(String(w.sourceRefs?.calendarUid||'')===uid||String(w.sourceRefs?.googleICalUID||'')===uid))||(gid&&String(w.sourceRefs?.googleEventId||'')===gid));
+   if(!workspace&&calendarRecord){
+    const oldStart=calendarRecord.start||{};
+    const oldDateRaw=String(oldStart.date||calendarRecord.date||'');
+    const oldDateISO=/^\d{2}\/\d{2}\/\d{4}$/.test(oldDateRaw)?oldDateRaw.split('/').reverse().join('-'):oldDateRaw;
+    const oldTime=String(oldStart.time||calendarRecord.time||'');
+    workspace=Object.values(workspaceMap).find(w=>ibisGoogleCleanName(w.name||'')===ibisGoogleCleanName(calendarRecord.studentName||calendarRecord.summary||r.name)&&(()=>{const wd=String(w.date||'');const wdISO=/^\d{2}\/\d{2}\/\d{4}$/.test(wd)?wd.split('/').reverse().join('-'):wd;return wdISO===oldDateISO&&String(w.time||'')===oldTime;})());
+   }
+   if(workspace){
+    workspace.sourceRefs=workspace.sourceRefs||{};if(uid){workspace.sourceRefs.calendarUid=uid;workspace.sourceRefs.googleICalUID=uid;}if(gid)workspace.sourceRefs.googleEventId=gid;workspace.sourceRefs.googleCalendarId=cal.id||state.googleCalendarId||'';workspace.sourceRefs.googleUpdated=ev.updated||null;workspace.sourceRefs.lastGoogleSyncAt=new Date().toISOString();
+    if(r.kind==='changed'){
+     const oldDateText=String(workspace.date||'');const oldDateISO=/^\d{2}\/\d{2}\/\d{4}$/.test(oldDateText)?oldDateText.split('/').reverse().join('-'):oldDateText;
+     const oldStamp=oldDateISO+(workspace.time?'T'+workspace.time:'');const oldDate=new Date(oldStamp);const isFuture=!oldStamp||Number.isNaN(oldDate.getTime())||oldDate.getTime()>=Date.now();
+     if(isFuture){const oldWorkspaceKey=Object.keys(workspaceMap).find(k=>workspaceMap[k]===workspace)||workspace.key||'';const newDateISO=r.parts.date||'';const newDateDisplay=/^\d{4}-\d{2}-\d{2}$/.test(newDateISO)?newDateISO.slice(8,10)+'/'+newDateISO.slice(5,7)+'/'+newDateISO.slice(0,4):newDateISO;const newWorkspaceKey=lessonKey(workspace.name||r.name,newDateDisplay,r.parts.time||'');
+      // If a destination workspace exists, do not overwrite it; stop and flag the ambiguity.
+      if(workspaceMap[newWorkspaceKey]&&workspaceMap[newWorkspaceKey]!==workspace){workspace.sourceRefs.scheduleChangeNeedsReview=true;workspace.sourceRefs.scheduleChangeConflictKey=newWorkspaceKey;}
+      else{workspace.date=newDateDisplay;workspace.time=r.parts.time;workspace.key=newWorkspaceKey;workspace.sourceRefs.lastScheduleUpdateAt=new Date().toISOString();if(oldWorkspaceKey&&oldWorkspaceKey!==newWorkspaceKey)delete workspaceMap[oldWorkspaceKey];workspaceMap[newWorkspaceKey]=workspace;}
+     }else{workspace.sourceRefs.scheduleChangeNeedsReview=true;}
+    }
+   }
   });
   results.filter(r=>r.kind==='new').forEach(r=>{
    const ev=r.ev,uid=String(ev.iCalUID||('gcal:'+String(ev.id||''))),gid=String(ev.id||'');
@@ -1004,8 +1025,8 @@ function ibisGoogleApplySafeSync(){
   state.googleCalendarSync=state.googleCalendarSync||{};state.googleCalendarSync.calendarId=cal.id||state.googleCalendarId||'';state.googleCalendarSync.calendarName=cal.summary||state.googleCalendarName||'';state.googleCalendarSync.lastAppliedAt=new Date().toISOString();state.googleCalendarSync.lastPreviewCount=results.length;state.googleCalendarSync.lastAdded=added;state.googleCalendarSync.lastLinked=linked;state.googleCalendarSync.lastSkipped=skipped;state.googleCalendarSync.lastErrors=errors;
   save();renderAll();
   const box=document.getElementById('googleCalCompareBox');
-  if(box)box.insertAdjacentHTML('afterbegin','<div class="alert good"><strong>Safe Sync v2.1 complete.</strong> '+linked+' existing calendar record(s) linked/refreshed (including approved schedule changes); '+added+' new event(s) added; '+already+' duplicate(s) skipped; '+skipped+' ambiguous/review event(s) left untouched.'+(errors.length?'<br>Not added because required date/name data was missing: '+errors.map(ibisGoogleEsc).join(', '):'')+'<br>Existing lesson IDs and preparation/history were not overwritten. Download a fresh IBIS backup now.</div>');
-  ibisGoogleStatus('Safe Sync v2.1 applied · '+added+' added · '+linked+' linked');
+  if(box)box.insertAdjacentHTML('afterbegin','<div class="alert good"><strong>Safe Sync v2.2 complete.</strong> '+linked+' existing calendar record(s) linked/refreshed (including approved schedule changes); '+added+' new event(s) added; '+already+' duplicate(s) skipped; '+skipped+' ambiguous/review event(s) left untouched.'+(errors.length?'<br>Not added because required date/name data was missing: '+errors.map(ibisGoogleEsc).join(', '):'')+'<br>Existing lesson IDs and preparation/history were not overwritten. Download a fresh IBIS backup now.</div>');
+  ibisGoogleStatus('Safe Sync v2.2 applied · '+added+' added · '+linked+' linked');
   ibisGoogleHelp('This build detects and applies matched schedule changes in the checked snapshot. It is still a manual check-and-apply workflow; incremental sync tokens, automatic polling and cancellation reconciliation are the next stage, not yet active.');
  }catch(err){console.error('IBIS safe Google Calendar sync failed',err);ibisGoogleStatus('Safe sync failed');ibisGoogleHelp(err.message||String(err));alert('Safe sync stopped: '+(err.message||String(err))+'. Please check the page and do not repeat until we review the error.');}
 }
