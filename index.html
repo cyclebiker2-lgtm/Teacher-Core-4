@@ -925,7 +925,80 @@ async function ibisDriveCreateFolderSafe(name,parent){const metadata={name,mimeT
 async function ibisDriveFindFolders(){let folders=await ibisDriveList(IBIS_DRIVE_FOLDER,'application/vnd.google-apps.folder');ibisDriveFolderId=folders[0]?.id||null;if(!ibisDriveFolderId){ibisDriveFileStatus('Folder not created yet');return}let backups=await ibisDriveList(IBIS_DRIVE_BACKUP_FOLDER,'application/vnd.google-apps.folder');ibisDriveBackupFolderId=backups.find(f=>(f.parents||[]).includes(ibisDriveFolderId))?.id||null;if(!ibisDriveBackupFolderId)ibisDriveBackupFolderId=(await ibisDriveCreateFolderSafe(IBIS_DRIVE_BACKUP_FOLDER,ibisDriveFolderId)).id;const files=await ibisDriveList(IBIS_DRIVE_DATA_FILE);ibisDriveDataFileId=files.find(f=>(f.parents||[]).includes(ibisDriveFolderId))?.id||null;ibisDriveFileStatus(ibisDriveDataFileId?'Cloud file found · '+IBIS_DRIVE_DATA_FILE:'Ready to create cloud workspace');}
 async function ibisDriveUploadFile(name,content,parent,fileId){const blob=new Blob([content],{type:'application/json'});const metadata={name,mimeType:'application/json'};if(parent&&!fileId)metadata.parents=[parent];const start=await fetch('https://www.googleapis.com/upload/drive/v3/files'+(fileId?'/'+encodeURIComponent(fileId):'')+'?uploadType=resumable&fields=id,name,modifiedTime',{method:fileId?'PATCH':'POST',headers:{Authorization:'Bearer '+ibisDriveToken,'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':'application/json','X-Upload-Content-Length':String(blob.size)},body:JSON.stringify(metadata)});if(!start.ok)throw new Error('Could not start Drive upload (HTTP '+start.status+').');const location=start.headers.get('Location');if(!location)throw new Error('Google did not provide a resumable upload URL. Check browser permissions and try again.');const uploaded=await fetch(location,{method:'PUT',headers:{'Content-Type':'application/json'},body:blob});let result={};try{result=await uploaded.json()}catch(_){}if(!uploaded.ok)throw new Error(result.error?.message||'Drive upload failed (HTTP '+uploaded.status+').');return result}
 async function ibisDriveMigrate(){if(!ibisDriveToken)return;try{if(!confirm('Upload this browser’s current IBIS workspace to Google Drive? This creates or replaces the primary cloud data file. If a cloud file already exists, use Load first unless you deliberately intend to replace it.'))return;await ibisDriveFindFolders();if(!ibisDriveFolderId)ibisDriveFolderId=(await ibisDriveCreateFolderSafe(IBIS_DRIVE_FOLDER,null)).id;if(!ibisDriveBackupFolderId)ibisDriveBackupFolderId=(await ibisDriveCreateFolderSafe(IBIS_DRIVE_BACKUP_FOLDER,ibisDriveFolderId)).id;const payload=JSON.stringify(buildIBISBackup());const result=await ibisDriveUploadFile(IBIS_DRIVE_DATA_FILE,payload,ibisDriveFolderId,ibisDriveDataFileId);ibisDriveDataFileId=result.id;ibisDriveCloudActive=true;ibisDriveFileStatus('Cloud workspace saved · '+new Date().toLocaleString());ibisDriveHelp('Initial upload complete. Automatic cloud saves are now enabled on this device while connected. Test Load on another device before relying on cloud storage as your only copy.');}catch(e){ibisDriveHelp('Upload failed; local data was not changed. '+e.message)}}
-async function ibisDriveLoad(){if(!ibisDriveToken)return;try{await ibisDriveFindFolders();if(!ibisDriveDataFileId){ibisDriveHelp('No cloud workspace exists yet. Upload this device’s workspace first.');return}if(!confirm('Load the cloud workspace and replace the currently open local workspace? A downloadable local backup is recommended first.'))return;await flushIBISPersistence();downloadBlob('IBIS_Pre_Drive_Load_Safety_Backup_'+backupTimestamp()+'.json',JSON.stringify(buildIBISBackup(),null,2));const res=await ibisDriveAPI('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(ibisDriveDataFileId)+'?alt=media');let payload=res;if(typeof res==='string')payload=JSON.parse(res);const problem=validateIBISBackup(payload);if(problem)throw new Error(problem);state=JSON.parse(JSON.stringify(payload.data.state));state.lessonWorkspaces=state.lessonWorkspaces||{};state.reports=state.reports||[];state.notes=state.notes||{};state.memory=state.memory||{};state.confirmations=state.confirmations||{};state.decisions=state.decisions||{};state.studioDrafts=state.studioDrafts||{};state.icsEvents=state.icsEvents||[];state.studentDB=Array.isArray(state.studentDB)?state.studentDB:[];DATA.students=state.studentDB;await flushIBISPersistence();renderAll();ibisDriveCloudActive=true;ibisDriveFileStatus('Loaded cloud workspace · '+new Date().toLocaleString());ibisDriveHelp('Cloud data loaded. Automatic cloud saves are now enabled on this device while connected. Verify key students, lesson records, reports and pricing before continuing.')}catch(e){ibisDriveHelp('Cloud load failed; check that the existing local backup is safe. '+e.message)}}
+async function ibisDriveLoad(){
+ if(!ibisDriveToken){ibisDriveHelp('Connect Google Drive first.');return;}
+ let stage='Preparing';
+ let previousState=null;
+ let stateWasReplaced=false;
+ try{
+  ibisDriveStatus('Preparing cloud restore…');
+  stage='Locating cloud workspace';
+  ibisDriveHelp('Stage 1/6 · Locating the primary IBIS workspace in Google Drive…');
+  await ibisDriveFindFolders();
+  if(!ibisDriveDataFileId){ibisDriveStatus('No cloud workspace found');ibisDriveHelp('No cloud workspace exists yet. Upload this device’s workspace first.');return;}
+  if(!confirm('Load the cloud workspace and replace the currently open local workspace? A downloadable local backup will be created first.')){ibisDriveStatus('Restore cancelled');ibisDriveHelp('No data was changed.');return;}
+
+  stage='Saving local safety backup';
+  ibisDriveStatus('Stage 2/6 · Saving local workspace…');
+  ibisDriveHelp('Stage 2/6 · Saving the current local workspace and preparing a downloadable safety backup.');
+  await flushIBISPersistence();
+  const safetyJSON=JSON.stringify(buildIBISBackup(),null,2);
+  downloadBlob('IBIS_Pre_Drive_Load_Safety_Backup_'+backupTimestamp()+'.json',safetyJSON);
+
+  stage='Downloading cloud workspace';
+  ibisDriveStatus('Stage 3/6 · Downloading cloud workspace…');
+  ibisDriveHelp('Stage 3/6 · Safety backup requested. Downloading the primary JSON file from Google Drive…');
+  const response=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(ibisDriveDataFileId)+'?alt=media',{headers:{Authorization:'Bearer '+ibisDriveToken}});
+  if(!response.ok){let detail='';try{const err=await response.json();detail=err.error?.message||'';}catch(_){}throw new Error('Google Drive download returned HTTP '+response.status+(detail?' · '+detail:''));}
+  const raw=await response.text();
+  if(!raw.trim())throw new Error('Google Drive returned an empty file. The local workspace has not been replaced.');
+
+  stage='Parsing and validating cloud data';
+  ibisDriveStatus('Stage 4/6 · Validating cloud data…');
+  ibisDriveHelp('Stage 4/6 · Download complete ('+Math.round(raw.length/1024)+' KB). Parsing JSON and checking the IBIS backup structure…');
+  let payload;
+  try{payload=JSON.parse(raw);}catch(parseError){throw new Error('The cloud file was downloaded but is not valid JSON. '+parseError.message);}
+  const problem=validateIBISBackup(payload);
+  if(problem)throw new Error('Cloud backup validation failed: '+problem);
+  if(!payload.data.state||typeof payload.data.state!=='object')throw new Error('Cloud backup does not contain a workspace state.');
+
+  stage='Applying cloud workspace';
+  ibisDriveStatus('Stage 5/6 · Applying cloud workspace…');
+  ibisDriveHelp('Stage 5/6 · Backup validated. Applying cloud data and saving it to this browser…');
+  previousState=JSON.parse(JSON.stringify(state));
+  const candidate=JSON.parse(JSON.stringify(payload.data.state));
+  candidate.lessonWorkspaces=candidate.lessonWorkspaces||{};
+  candidate.reports=candidate.reports||[];
+  candidate.notes=candidate.notes||{};
+  candidate.memory=candidate.memory||{};
+  candidate.confirmations=candidate.confirmations||{};
+  candidate.decisions=candidate.decisions||{};
+  candidate.studioDrafts=candidate.studioDrafts||{};
+  candidate.icsEvents=candidate.icsEvents||[];
+  candidate.studentDB=Array.isArray(candidate.studentDB)?candidate.studentDB:[];
+  state=candidate;
+  stateWasReplaced=true;
+  DATA.students=state.studentDB;
+  await flushIBISPersistence();
+
+  stage='Refreshing workspace';
+  ibisDriveStatus('Stage 6/6 · Refreshing IBIS…');
+  ibisDriveHelp('Stage 6/6 · Data saved locally. Refreshing the IBIS workspace views…');
+  renderAll();
+  ibisDriveCloudActive=true;
+  ibisDriveStatus('Cloud workspace loaded');
+  ibisDriveFileStatus('Loaded cloud workspace · '+new Date().toLocaleString());
+  ibisDriveHelp('Restore complete. The cloud workspace was downloaded, validated, saved locally and displayed. Check a few students, lesson records, reports and pricing before continuing.');
+ }catch(e){
+  const message=e?.message||String(e);
+  ibisDriveStatus('Cloud restore failed');
+  if(stateWasReplaced&&previousState){
+   try{state=previousState;DATA.students=state.studentDB||[];await flushIBISPersistence();renderAll();ibisDriveHelp('Restore stopped during “'+stage+'”. The previous local workspace was restored. '+message);}catch(rollbackError){ibisDriveHelp('Restore stopped during “'+stage+'” and rollback could not be fully confirmed. Keep the downloaded safety backup and do not close this tab until you have checked the workspace. Restore error: '+message+' · Rollback error: '+(rollbackError?.message||rollbackError));}
+  }else{
+   ibisDriveHelp('Restore stopped during “'+stage+'”. The current local workspace was not replaced. '+message);
+  }
+ }
+}
 function ibisDriveScheduleCloudSave(){if(!ibisDriveCloudActive||!ibisDriveToken||!ibisDriveDataFileId)return;if(ibisDriveSaveTimer)clearTimeout(ibisDriveSaveTimer);ibisDriveSaveTimer=setTimeout(async()=>{if(ibisDriveSaving){ibisDriveScheduleCloudSave();return}ibisDriveSaving=true;try{await flushIBISPersistence();const payload=JSON.stringify(buildIBISBackup());const result=await ibisDriveUploadFile(IBIS_DRIVE_DATA_FILE,payload,ibisDriveFolderId,ibisDriveDataFileId);ibisDriveDataFileId=result.id||ibisDriveDataFileId;ibisDriveFileStatus('Cloud saved · '+new Date().toLocaleTimeString());ibisDriveHelp('Changes saved to Google Drive. Keep the dated backups enabled and verify cloud data on your other devices.')}catch(e){ibisDriveFileStatus('Cloud save failed');ibisDriveHelp('A local copy remains, but the latest changes may not be in Drive. Reconnect and retry. '+e.message)}finally{ibisDriveSaving=false}},2500)}
 async function ibisDriveBackup(){if(!ibisDriveToken)return;try{await ibisDriveFindFolders();if(!ibisDriveFolderId)ibisDriveFolderId=(await ibisDriveCreateFolderSafe(IBIS_DRIVE_FOLDER,null)).id;if(!ibisDriveBackupFolderId)ibisDriveBackupFolderId=(await ibisDriveCreateFolderSafe(IBIS_DRIVE_BACKUP_FOLDER,ibisDriveFolderId)).id;await flushIBISPersistence();const name='IBIS_Teacher_Core_Backup_'+backupTimestamp()+'.json';const result=await ibisDriveUploadFile(name,JSON.stringify(buildIBISBackup()),ibisDriveBackupFolderId,null);ibisDriveFileStatus('Dated backup created · '+(result.name||name));ibisDriveHelp('Dated backup uploaded. Confirm that it appears in the IBIS Teacher Core Cloud/Backups folder in Drive.')}catch(e){ibisDriveHelp('Backup upload failed. Your local workspace was not changed. '+e.message)}}
 function ibisDriveDisconnect(){ibisDriveToken=null;ibisDriveButtons();ibisDriveStatus('Disconnected');ibisDriveHelp('Disconnected. Cloud actions are disabled until you reconnect.');}
