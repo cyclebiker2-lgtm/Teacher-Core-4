@@ -1129,7 +1129,7 @@ function ibisGoogleCompare(){
    const name=ibisGoogleCleanName(ev.summary||'');
    if(String(ev.status||'').toLowerCase()==='cancelled'){
      const old=(state.icsEvents||[]).find(x=>(gId&&String(x.googleEventId||'')===gId)||(uid&&(String(x.googleICalUID||'')===uid||String(x.uid||'')===uid)))||Object.values(state.lessonWorkspaces||{}).find(w=>(gId&&String(w.sourceRefs?.googleEventId||'')===gId)||(uid&&String(w.sourceRefs?.googleICalUID||w.sourceRefs?.calendarUid||'')===uid));
-     return {ev,parts,name:name||(old?.studentName||old?.name||''),status:'Cancellation needs review',detail:'Google reports this event as cancelled. Review the linked lesson before marking it cancelled; no record is deleted automatically.',kind:'review',existing:old||null};
+     return {ev,parts,name:name||(old?.studentName||old?.name||''),status:'Calendar lesson removed / cancelled',detail:'Google reports that this lesson no longer exists on the calendar. Applying this change will mark the IBIS lesson Cancelled and remove it from the active scheduled workflow while preserving the lesson record/history.',kind:'cancelled',existing:old||null};
    }
    const exactUid=ics.find(x=>(gId&&String(x.googleEventId||'')===gId)||(uid&&(String(x.googleICalUID||'')===uid||String(x.uid||'')===uid)))||workspaces.find(w=>(gId&&String(w.sourceRefs?.googleEventId||'')===gId)||(uid&&String(w.sourceRefs?.googleICalUID||w.sourceRefs?.calendarUid||'')===uid));
    if(exactUid){const oldDate=String(exactUid.start?.date||exactUid.date||'');const oldTime=String(exactUid.start?.time||exactUid.time||'');const changed=!!(oldDate&&parts.date&&oldDate!==parts.date||oldTime!==parts.time);return {ev,parts,name,status:changed?'Schedule changed':'Matched by calendar identity',detail:changed?('Previously '+oldDate+(oldTime?' · '+oldTime:'')+' → now '+parts.date+(parts.time?' · '+parts.time:'')+'. Lesson identity preserved; schedule update awaits approval.'):'Existing source identity found; schedule unchanged',kind:changed?'changed':'matched',existing:exactUid,oldDate,oldTime};}
@@ -1143,10 +1143,36 @@ function ibisGoogleCompare(){
    if(workspace)return {ev,parts,name,status:'Existing IBIS workspace candidate',detail:'A workspace matches by name/date/time, but Google identity is not linked',kind:'candidate'};
    return {ev,parts,name,status:'New calendar event candidate',detail:'No exact existing match found. Not imported.',kind:'new'};
  });
+ // Also detect IBIS calendar records with a saved Google identity that have disappeared
+ // from the current Google calendar view. This catches deletions even when a cancellation
+ // tombstone is not returned by the API. Only records inside the same 30-day preview window
+ // are considered, so older historical lessons are never treated as missing.
+ const googleIdentitySet=new Set();
+ ibisGoogleLastEvents.forEach(ev=>{const gid=String(ev.id||'');const uid=String(ev.iCalUID||'');if(gid)googleIdentitySet.add('g:'+gid);if(uid)googleIdentitySet.add('u:'+uid)});
+ const previewStart=Date.now(), previewEnd=previewStart+30*86400000;
+ const missing=[];
+ (state.icsEvents||[]).forEach(rec=>{
+   const gid=String(rec.googleEventId||''); const uid=String(rec.googleICalUID||rec.uid||'');
+   if(!gid&&!uid)return;
+   const rawDate=String(rec.start?.date||rec.date||'');
+   const rawTime=String(rec.start?.time||rec.time||'');
+   const iso=/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)?rawDate.split('/').reverse().join('-'):rawDate;
+   const stamp=iso?(iso+(rawTime?'T'+rawTime:'T00:00:00')):'';
+   const t=stamp?new Date(stamp).getTime():NaN;
+   if(!Number.isFinite(t)||t<previewStart||t>previewEnd)return;
+   const present=(gid&&googleIdentitySet.has('g:'+gid))||(uid&&googleIdentitySet.has('u:'+uid));
+   if(present)return;
+   const existingWorkspace=Object.values(state.lessonWorkspaces||{}).find(w=>{
+     const sg=String(w.sourceRefs?.googleEventId||''); const su=String(w.sourceRefs?.googleICalUID||w.sourceRefs?.calendarUid||'');
+     return (gid&&sg===gid)||(uid&&su===uid);
+   });
+   missing.push({ev:{id:gid,iCalUID:uid,summary:rec.summary||rec.studentName||''},parts:{date:iso,time:rawTime},name:rec.studentName||cleanICSStudentName(rec.summary||''),status:'IBIS lesson missing from Google Calendar',detail:'IBIS has a linked lesson in this preview window, but Google Calendar no longer contains the matching event. Review before applying; IBIS will mark the lesson Cancelled rather than delete its historical record.',kind:'missing',existing:existingWorkspace||rec});
+ });
+ results.push(...missing);
  ibisGoogleLastResults=results;
  const applyBtn=document.getElementById('googleCalApplyBtn');if(applyBtn)applyBtn.disabled=false;
  const count=k=>results.filter(r=>r.kind===k).length;
- const stats=[['Calendar events',results.length],['Identity matches',count('matched')],['Schedule changes',count('changed')],['Possible existing',count('candidate')],['Needs review',count('review')],['No match',count('new')]];
+ const stats=[['Calendar events',results.length],['Identity matches',count('matched')],['Schedule changes',count('changed')],['Calendar cancellations',count('cancelled')],['Missing from Google',count('missing')],['Possible existing',count('candidate')],['Needs review',count('review')],['No match',count('new')]];
  const statHtml='<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin:12px 0">'+stats.map(([l,n])=>'<div class="stat"><div class="label">'+ibisGoogleEsc(l)+'</div><div class="value">'+n+'</div></div>').join('')+'</div>';
  const rows=results.slice(0,200).map(r=>{const dateTime=(r.parts.date||'Date unknown')+(r.parts.time?' · '+r.parts.time:' · All day');return '<div class="metric" style="align-items:flex-start;gap:12px"><div style="min-width:155px"><strong>'+ibisGoogleEsc(dateTime)+'</strong><div class="small">'+ibisGoogleEsc(r.status)+'</div></div><div style="flex:1;min-width:160px"><strong>'+ibisGoogleEsc(r.name||r.ev.summary||'(Untitled event)')+'</strong><div class="small">'+ibisGoogleEsc(r.detail)+'</div></div></div>';}).join('');
  box.innerHTML='<div class="alert good"><strong>Read-only comparison complete.</strong> This is a matching report only: no events were imported, no lesson IDs were created or changed, and no preparation/history was modified.</div>'+statHtml+(results.length?rows:'<div class="empty">No events to compare. Run Preview events first.</div>')+(results.length>200?'<div class="small">Showing first 200 results.</div>':'')+'<div class="alert" style="margin-top:12px"><strong>Next:</strong> Apply safe sync will link confirmed identity matches and add only unmatched new events. Possible-existing and review items are skipped. No existing lesson ID or preparation/history field is overwritten.</div>'+'<div class="small" style="margin-top:10px">Matching policy: calendar UID / saved source identity first; exact name/date/time second; ambiguous date/name similarities are flagged for review, never silently merged. Events outside the preview window are not evaluated.</div>';
@@ -1177,13 +1203,25 @@ function ibisGoogleApplySafeSync(){
  if(!results.length){alert('Run Preview events and Compare with IBIS records first.');return;}
  const matched=results.filter(r=>r.kind==='matched').length;
  const changed=results.filter(r=>r.kind==='changed').length;
+ const cancelled=results.filter(r=>r.kind==='cancelled'||r.kind==='missing').length;
  const fresh=results.filter(r=>r.kind==='new').length;
- const skipped=results.length-matched-changed-fresh;
- const message='Apply the reviewed calendar changes?\n\n'+matched+' unchanged matches will refresh source references.\n'+changed+' matched schedule changes will update calendar scheduling fields while preserving lesson identity.\n'+fresh+' unmatched events will be added.\n'+skipped+' possible-existing/review events will be skipped.\n\nCompleted/past workspace dates will not be rewritten. Back up first.';
+ const skipped=results.length-matched-changed-cancelled-fresh;
+ const message='Apply the reviewed calendar changes?\n\n'+matched+' unchanged matches will refresh source references.\n'+changed+' matched schedule changes will update calendar scheduling fields while preserving lesson identity.\n'+cancelled+' lesson(s) removed/cancelled in Google Calendar will be marked Cancelled in IBIS and removed from the active scheduled workflow; their history will be preserved.\n'+fresh+' unmatched events will be added.\n'+skipped+' possible-existing/review events will be skipped.\n\nCompleted/past workspace dates will not be rewritten. Back up first.';
  if(!confirm(message))return;
  const cal=ibisGoogleCalendars.find(c=>c.id===document.getElementById('googleCalSelect')?.value)||{};
  let linked=0,added=0,already=0,errors=[];
  try{
+  // Calendar cancellations/deletions are explicit sync actions. We never physically delete
+  // the lesson workspace or evidence; instead the lesson becomes Cancelled and drops out of
+  // the active scheduled workflow. This keeps the teaching history auditable.
+  results.filter(r=>r.kind==='cancelled'||r.kind==='missing').forEach(r=>{
+   const ev=r.ev,uid=String(ev.iCalUID||''),gid=String(ev.id||'');
+   const calendarRecord=(state.icsEvents||[]).find(x=>(uid&&String(x.googleICalUID||x.uid||'')===uid)||(gid&&String(x.googleEventId||'')===gid));
+   if(calendarRecord){calendarRecord.status='CANCELLED';calendarRecord.googleEventId=gid||calendarRecord.googleEventId||'';calendarRecord.googleICalUID=uid||calendarRecord.googleICalUID||'';calendarRecord.googleCancellationDetectedAt=new Date().toISOString();calendarRecord.lastGoogleSyncAt=new Date().toISOString();}
+   let workspace=Object.values(state.lessonWorkspaces||{}).find(w=>(uid&&(String(w.sourceRefs?.googleICalUID||w.sourceRefs?.calendarUid||'')===uid))||(gid&&String(w.sourceRefs?.googleEventId||'')===gid));
+   if(!workspace&&r.existing?.key)workspace=state.lessonWorkspaces?.[r.existing.key];
+   if(workspace){workspace.workflowState='Cancelled';workspace.phase='Cancelled';workspace.cancelledAt=new Date().toISOString();workspace.updated=new Date().toISOString();workspace.sourceRefs=workspace.sourceRefs||{};workspace.sourceRefs.googleCancellationDetectedAt=new Date().toISOString();workspace.sourceRefs.googleCancellationReason='Removed or cancelled in Google Calendar';}
+  });
   (results.filter(r=>r.kind==='matched'||r.kind==='changed')).forEach(r=>{
    const ev=r.ev,uid=String(ev.iCalUID||''),gid=String(ev.id||'');
    const calendarRecord=(state.icsEvents||[]).find(x=>(uid&&String(x.uid||'')===uid)||(gid&&String(x.googleEventId||'')===gid));
@@ -1226,7 +1264,7 @@ function ibisGoogleApplySafeSync(){
   if(Array.isArray(state.googleCalendarSync.pendingChanges)){const appliedIds=new Set(results.filter(r=>r.kind==='matched'||r.kind==='changed'||r.kind==='new').map(r=>String(r.ev?.id||r.ev?.iCalUID||'')));state.googleCalendarSync.pendingChanges=state.googleCalendarSync.pendingChanges.filter(ev=>!appliedIds.has(String(ev.id||ev.iCalUID||'')));}
   save();renderAll();
   const box=document.getElementById('googleCalCompareBox');
-  if(box)box.insertAdjacentHTML('afterbegin','<div class="alert good"><strong>Calendar sync changes applied.</strong> '+linked+' existing calendar record(s) linked/refreshed (including approved schedule changes); '+added+' new event(s) added; '+already+' duplicate(s) skipped; '+skipped+' ambiguous/review event(s) left untouched.'+(errors.length?'<br>Not added because required date/name data was missing: '+errors.map(ibisGoogleEsc).join(', '):'')+'<br>Existing lesson IDs and preparation/history were not overwritten. Download a fresh IBIS backup now.</div>');
+  if(box)box.insertAdjacentHTML('afterbegin','<div class="alert good"><strong>Calendar sync changes applied.</strong> '+linked+' existing calendar record(s) linked/refreshed; '+changed+' schedule change(s) applied; '+cancelled+' lesson(s) marked Cancelled because they were removed/cancelled in Google Calendar; '+added+' new event(s) added; '+already+' duplicate(s) skipped; '+skipped+' ambiguous/review event(s) left untouched.'+(errors.length?'<br>Not added because required date/name data was missing: '+errors.map(ibisGoogleEsc).join(', '):'')+'<br>Existing lesson IDs and preparation/history were preserved. Download a fresh IBIS backup now.</div>');
   ibisGoogleLastResults=[];const applyDone=document.getElementById('googleCalApplyBtn');if(applyDone)applyDone.disabled=true;
   ibisGoogleStatus('Calendar changes applied · '+added+' added · '+linked+' linked');
   ibisGoogleHelp('Changes from this reviewed batch were applied where safe. Incremental sync cursor remains active; cancellations and ambiguous matches require manual review. Check the comparison and backup after each first-time rollout.');
