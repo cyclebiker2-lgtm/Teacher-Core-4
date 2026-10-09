@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IBIS Recorder v3 — Source-Separated Deepgram Pipeline</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(to bottom,#000,#4B2E0B);color:#FFD700;min-height:100vh;padding:20px}
+.container{max-width:1050px;margin:auto}
+header,.content{background:rgba(0,0,0,.82);border:1px solid #FFD700}
+header{border-radius:12px 12px 0 0;padding:28px;text-align:center}
+header h1{margin:0;color:#B7410E;text-shadow:1px 1px 2px #FFD700}
+header p{margin:10px 0 0}
+.content{border-top:none;border-radius:0 0 12px 12px;padding:28px;background-color:rgba(117,9,9,.82)}
+.section{margin-bottom:28px}
+.section-title{font-size:18px;font-weight:700;margin-bottom:14px;color:#beb232;padding-bottom:6px;border-bottom:1px solid #FFD700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+label{display:block;margin-bottom:5px;font-weight:600;font-size:14px}
+input,select{width:100%;padding:12px;background:rgba(0,0,0,.6);border:1px solid #FFD700;border-radius:6px;color:#FFD700}
+select option{background:#2a1810}
+.help{font-size:12px;color:#beb232;margin-top:5px;line-height:1.45}
+.buttons{display:flex;gap:10px;flex-wrap:wrap}
+button{padding:11px 18px;border-radius:8px;font-weight:700;cursor:pointer;border:1px solid #FFD700}
+.primary{background:linear-gradient(135deg,#B7410E,#8B3010);color:#FFD700}
+.danger{background:#750000;color:#FFD700}
+.success{background:#4B6B0B;color:#FFD700}
+.secondary{background:transparent;color:#FFD700}
+button:disabled{opacity:.45;cursor:not-allowed}
+.status{padding:13px;border-radius:8px;background:rgba(0,0,0,.4);border:1px solid rgba(255,215,0,.3);margin-bottom:15px}
+.status.success{border-color:#4B6B0B;color:#90EE90}
+.status.error{border-color:#8B0000;color:#FF6B6B}
+.status.warn{border-color:#B7410E;color:#FFA500}
+.timer{text-align:center;font:700 46px/1 'Courier New',monospace;margin:18px 0;text-shadow:0 0 10px rgba(255,215,0,.45)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.metric{background:linear-gradient(135deg,rgba(183,65,14,.8),rgba(117,9,9,.8));border:1px solid #FFD700;border-radius:10px;padding:15px;text-align:center}
+.metric .label{font-size:11px;text-transform:uppercase;color:#beb232}.metric .value{font-size:24px;font-weight:700;margin-top:5px}
+pre{white-space:pre-wrap;word-break:break-word;max-height:440px;overflow:auto;background:#080706;border:1px solid rgba(255,215,0,.25);padding:14px;border-radius:8px;color:#eee;font-size:12px}
+.notice{background:rgba(255,215,0,.06);border-left:3px solid #FFD700;padding:12px;font-size:13px;line-height:1.5}
+.source-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.source-card{padding:16px;border:1px solid rgba(255,215,0,.45);border-radius:10px;background:rgba(0,0,0,.3)}
+.source-card h3{margin:0 0 8px;color:#FFD700}
+.pron-review{margin-top:14px;padding:14px;border:1px solid rgba(255,165,0,.45);border-radius:10px;background:rgba(0,0,0,.28)}.pron-item{padding:11px;border:1px solid rgba(255,215,0,.18);border-radius:8px;margin:8px 0;background:rgba(0,0,0,.22)}.pron-item .meta{font-size:11px;color:#beb232}.pron-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #FFD700;font-size:11px;margin-top:4px}
+@media(max-width:700px){.source-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>IBIS Recorder v3</h1>
+<p>Source-Separated Recording → Deepgram Multichannel → IBIS Evidence</p>
+</header>
+<div class="content">
+
+<div class="section">
+<div class="section-title">API & Lesson Configuration</div>
+<div class="grid">
+<div><label for="apiKey">Deepgram API Key</label><input id="apiKey" type="password" placeholder="Enter Deepgram API key"><div class="help">Stored locally in this browser. The key is sent directly to Deepgram from this page.</div></div>
+<div><label for="studentName">Student / lesson summary</label><select id="studentName" required><option value="">Select student / lesson summary…</option><option value="Alexander S. - Preply lesson">Alexander S. - Preply lesson</option><option value="Alexey - Preply lesson">Alexey - Preply lesson</option><option value="Alfredo - Preply lesson">Alfredo - Preply lesson</option><option value="Ana - Preply lesson">Ana - Preply lesson</option><option value="David L. - Preply lesson">David L. - Preply lesson</option><option value="FRANCISCO - Preply lesson">FRANCISCO - Preply lesson</option><option value="Gabi P. - Preply lesson">Gabi P. - Preply lesson</option><option value="Gerard M. - Preply lesson">Gerard M. - Preply lesson</option><option value="Joel - Preply lesson">Joel - Preply lesson</option><option value="jose luis - Preply lesson">jose luis - Preply lesson</option><option value="Laura - Preply lesson">Laura - Preply lesson</option><option value="Luca - Preply lesson">Luca - Preply lesson</option><option value="Luiz J. - Preply lesson">Luiz J. - Preply lesson</option><option value="Maria A. - Preply lesson">Maria A. - Preply lesson</option><option value="Miguel - Preply lesson">Miguel - Preply lesson</option><option value="Pablo G. - Preply lesson">Pablo G. - Preply lesson</option><option value="Pierina F. - Preply lesson">Pierina F. - Preply lesson</option><option value="Samantha - Preply lesson">Samantha - Preply lesson</option><option value="Sandra - Preply lesson">Sandra - Preply lesson</option><option value="Sergio - Preply lesson">Sergio - Preply lesson</option></select><button type="button" id="addNameBtn" style="margin-top:8px" onclick="addStudentName()">＋ Add Name</button><div class="help">Choose a Summary from the IBIS Weekly Register, or add a name for future use. Custom names are saved in this browser.</div></div>
+<div><label for="lessonType">Lesson Type</label><select id="lessonType"><option>conversation</option><option>grammar</option><option>vocabulary</option><option>exam preparation</option><option>general</option></select></div>
+<div><label for="topic">Topic</label><input id="topic" placeholder="Optional lesson topic"></div>
+<div style="grid-column:1/-1"><label for="keyterms">Lesson key terms</label><input id="keyterms" placeholder="Optional terms/phrases to improve recognition, comma separated"><div class="help">Nova-3 keyterm prompting is used only for these terms. This improves recognition of lesson-specific vocabulary without changing the student speech evidence.</div></div>
+</div>
+</div>
+
+<div class="section">
+<div class="section-title">Speaker Source Mapping</div>
+<div class="source-grid">
+<div class="source-card">
+<h3>Channel 0 — TEACHER</h3>
+<div>Browser microphone input</div>
+<span class="badge">AUTHORITATIVE IDENTITY</span>
+</div>
+<div class="source-card">
+<h3>Channel 1 — STUDENT</h3>
+<div>Preply/tab/system audio</div>
+<span class="badge">AUTHORITATIVE IDENTITY</span>
+</div>
+</div>
+<div class="notice" style="margin-top:14px">
+Teacher/student identity is now determined by the recording source, not by Deepgram's speaker diarization. This prevents the speaker-ID flipping seen in the 50-minute regression lesson. Deepgram multichannel transcription receives the two sources separately.
+</div>
+<div class="buttons" style="margin-top:12px">
+<button class="secondary" onclick="swapSources()">⇄ Swap Sources</button>
+</div>
+<div class="help">Use Swap Sources only as an emergency override. The normal configuration is microphone = Teacher and tab/system audio = Student.</div>
+</div>
+
+<div class="section">
+<div class="section-title">Deepgram Configuration</div>
+<div class="grid">
+<div><label for="model">Model</label><select id="model"><option value="nova-3">nova-3</option></select></div>
+<div><label for="language">Language</label><select id="language"><option value="en">English</option></select></div>
+</div>
+<div class="notice" style="margin-top:12px">
+Deepgram is fixed to <strong>Nova-3</strong> with <strong>smart_format=false</strong>, <strong>filler_words=true</strong>, <strong>multichannel=true</strong>, <strong>utterances=true</strong>, and <strong>words=true</strong>. Raw spoken form is preserved for downstream linguistic analysis; channel identity remains authoritative.
+</div>
+</div>
+
+<div class="section">
+<div class="section-title">Recording</div>
+<div id="status" class="status">Ready. Enter your Deepgram key and start a recording.</div>
+<div class="timer" id="timer">00:00:00</div>
+<div class="buttons">
+<button id="startBtn" class="primary" onclick="startRecording()">● Start Recording</button>
+<button id="stopBtn" class="danger" onclick="stopRecording()" disabled>■ Stop Recording</button>
+</div>
+<div class="help" style="margin-top:14px">
+Select the Preply tab and <strong>check Share audio</strong>. Microphone permission is then requested separately. The recorder places microphone audio on Channel 0 and tab/system audio on Channel 1.
+</div>
+</div>
+
+<div class="section" id="results" style="display:none">
+<div class="section-title">Recording / Deepgram Verification</div>
+<div id="requestMetrics" class="metrics"></div>
+
+<div class="pron-review">
+ <div class="section-title" style="margin-bottom:8px">Pronunciation Review Queue</div>
+ <div class="help">These are <strong>candidates only</strong>. IBIS does not treat a transcription mismatch as a confirmed pronunciation error. Review the original audio before confirming a pronunciation target.</div>
+ <div id="pronunciationSummary" class="grid five" style="margin:10px 0"><div class="metric"><div class="label">Candidates</div><div class="value">0</div></div><div class="metric"><div class="label">Confirmed pronunciation</div><div class="value">0</div></div><div class="metric"><div class="label">Transcription errors</div><div class="value">0</div></div><div class="metric"><div class="label">Unclear</div><div class="value">0</div></div><div class="metric"><div class="label">Pending</div><div class="value">0</div></div></div><div id="pronunciationQueue"><div class="help">No pronunciation candidates generated yet.</div></div>
+ <audio id="pronunciationPlayer" controls style="width:100%;display:none;margin-top:10px"></audio>
+</div>
+
+<div style="margin-top:20px">
+<div class="section-title">Source-Separated Transcript</div>
+<pre id="transcript"></pre>
+</div>
+
+<div style="margin-top:20px">
+<div class="section-title">Preserved Deepgram Response</div>
+<pre id="deepgramJson"></pre>
+</div>
+
+<div style="margin-top:20px">
+<div class="section-title">IBIS Evidence Package</div>
+<pre id="ibisJson"></pre>
+</div>
+
+<div class="buttons" style="margin-top:15px">
+<button class="success" onclick="downloadIBIS()">Download IBIS Evidence JSON</button>
+<button class="success" onclick="sendEvidenceToIBIS()">Send Evidence to IBIS</button>
+<button class="secondary" onclick="downloadDeepgram()">Download Original Deepgram JSON</button>
+<button class="secondary" onclick="downloadRecording()">Download Source-Separated Recording</button>
+</div>
+</div>
+
+</div>
+</div>
+
+<script>
+let mediaRecorder=null,audioChunks=[],startTime=0,timerInterval=null;
+let displayStream=null,micStream=null,audioContext=null;
+let lastDeepgram=null,lastIBIS=null,lastAudioBlob=null;
+let sourceSwap=false;
+
+window.addEventListener("DOMContentLoaded",()=>{
+ const k=localStorage.getItem("deepgramApiKey")||"";
+ document.getElementById("apiKey").value=k;
+ const studentSelect=document.getElementById("studentName");
+ try {
+   const customNames=JSON.parse(localStorage.getItem("ibisRecorderCustomStudentNames")||"[]");
+   customNames.forEach(name=>addStudentOption(name));
+   const savedStudent=localStorage.getItem("ibisRecorderStudentSummary")||"";
+   if(savedStudent && Array.from(studentSelect.options).some(o=>o.value===savedStudent)) studentSelect.value=savedStudent;
+ } catch(e) { console.warn("Could not load saved student names",e); }
+ studentSelect.addEventListener("change",()=>localStorage.setItem("ibisRecorderStudentSummary",studentSelect.value));
+ updateSourceLabels();
+});
+
+function addStudentOption(name){
+ const select=document.getElementById("studentName");
+ const existing=Array.from(select.options).find(o=>o.value.toLocaleLowerCase()===name.toLocaleLowerCase());
+ if(existing){select.value=existing.value;return existing;}
+ const option=document.createElement("option"); option.value=name; option.textContent=name;
+ select.appendChild(option); return option;
+}
+function addStudentName(){
+ const entered=window.prompt("Enter the student name or exact lesson Summary:");
+ if(entered===null)return;
+ const name=entered.trim();
+ if(!name){window.alert("Please enter a name.");return;}
+ const select=document.getElementById("studentName");
+ const existing=Array.from(select.options).find(o=>o.value.toLocaleLowerCase()===name.toLocaleLowerCase());
+ if(existing){select.value=existing.value;localStorage.setItem("ibisRecorderStudentSummary",existing.value);window.alert("That name already exists, so it has been selected.");return;}
+ addStudentOption(name); select.value=name;
+ try {
+   const saved=JSON.parse(localStorage.getItem("ibisRecorderCustomStudentNames")||"[]");
+   if(!saved.some(n=>n.toLocaleLowerCase()===name.toLocaleLowerCase())) saved.push(name);
+   localStorage.setItem("ibisRecorderCustomStudentNames",JSON.stringify(saved));
+   localStorage.setItem("ibisRecorderStudentSummary",name);
+ } catch(e) { window.alert("The name was added for this session, but browser storage was unavailable."); }
+}
+
+function status(message,type="info"){
+ const el=document.getElementById("status");
+ el.className="status "+(type==="success"?"success":type==="error"?"error":type==="warn"?"warn":"");
+ el.textContent=message;
+}
+function updateTimer(){
+ const ms=Date.now()-startTime;
+ const h=Math.floor(ms/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);
+ document.getElementById("timer").textContent=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+function getDurationSeconds(){return Math.max(0,(Date.now()-startTime)/1000)}
+
+function updateSourceLabels(){
+ const cards=document.querySelectorAll(".source-card");
+ if(!cards.length)return;
+ cards[0].querySelector("h3").textContent=sourceSwap?"Channel 0 — STUDENT":"Channel 0 — TEACHER";
+ cards[0].querySelector("div").textContent=sourceSwap?"Preply/tab/system audio":"Browser microphone input";
+ cards[1].querySelector("h3").textContent=sourceSwap?"Channel 1 — TEACHER":"Channel 1 — STUDENT";
+ cards[1].querySelector("div").textContent=sourceSwap?"Browser microphone input":"Preply/tab/system audio";
+}
+function swapSources(){
+ if(mediaRecorder && mediaRecorder.state!=="inactive"){alert("Stop the recording before changing the source mapping.");return}
+ sourceSwap=!sourceSwap;
+ updateSourceLabels();
+ status(sourceSwap?"Source mapping swapped for the next recording.":"Normal mapping restored: microphone = Teacher; tab/system audio = Student.","warn");
+}
+
+function makeMonoSource(ctx,stream){
+ const source=ctx.createMediaStreamSource(stream);
+ const channels=Math.max(1,source.channelCount||1);
+ if(channels===1){
+   const gain=ctx.createGain();
+   source.connect(gain);
+   return gain;
+ }
+ const splitter=ctx.createChannelSplitter(channels);
+ const gain=ctx.createGain();
+ source.connect(splitter);
+ splitter.connect(gain,0,0);
+ return gain;
+}
+
+async function startRecording(){
+ if(!document.getElementById("studentName").value){status("Please select the exact student / lesson summary from the dropdown before recording.","error");return}
+ const key=document.getElementById("apiKey").value.trim();
+ if(!key){status("Please enter your Deepgram API key first.","error");return}
+ localStorage.setItem("deepgramApiKey",key);
+
+ try{
+  status("Requesting tab/screen capture. Select the Preply tab and CHECK Share audio.","info");
+  displayStream=await navigator.mediaDevices.getDisplayMedia({
+   video:{displaySurface:"browser"},
+   audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:2}
+  });
+  if(!displayStream.getAudioTracks().length) throw new Error("No tab audio was supplied. Stop and restart with Share audio enabled.");
+
+  status("Requesting microphone access...","info");
+  micStream=await navigator.mediaDevices.getUserMedia({
+   audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}
+  });
+
+  audioContext=new AudioContext({sampleRate:48000});
+  await audioContext.resume();
+
+  // Two physically separated source channels:
+  // normal mode: channel 0 = microphone/teacher, channel 1 = tab/student.
+  const destination=audioContext.createMediaStreamDestination();
+  destination.channelCount=2;
+  destination.channelCountMode="explicit";
+  destination.channelInterpretation="speakers";
+
+  const micMono=makeMonoSource(audioContext,micStream);
+  const tabMono=makeMonoSource(audioContext,displayStream);
+
+  const merger=audioContext.createChannelMerger(2);
+  if(!sourceSwap){
+    micMono.connect(merger,0,0);
+    tabMono.connect(merger,0,1);
+  }else{
+    tabMono.connect(merger,0,0);
+    micMono.connect(merger,0,1);
+  }
+  merger.connect(destination);
+
+  let mime="audio/webm;codecs=opus";
+  if(!MediaRecorder.isTypeSupported(mime)) mime="audio/webm";
+  if(!MediaRecorder.isTypeSupported(mime)) throw new Error("This browser does not support a recordable WebM audio format.");
+
+  mediaRecorder=new MediaRecorder(destination.stream,{mimeType:mime,audioBitsPerSecond:128000});
+  audioChunks=[];
+
+  mediaRecorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};
+  mediaRecorder.onstop=async()=>{clearInterval(timerInterval);await processRecording();cleanup()};
+  mediaRecorder.start(1000);
+
+  startTime=Date.now();timerInterval=setInterval(updateTimer,1000);
+  document.getElementById("startBtn").disabled=true;
+  document.getElementById("stopBtn").disabled=false;
+  status("🔴 Recording — Channel 0 = Teacher microphone; Channel 1 = Student tab audio.","success");
+ }catch(e){
+  console.error(e);
+  status("Recording error: "+e.message,"error");
+  cleanup();
+ }
+}
+
+function stopRecording(){
+ if(mediaRecorder&&mediaRecorder.state!=="inactive"){
+  mediaRecorder.stop();
+  document.getElementById("startBtn").disabled=false;
+  document.getElementById("stopBtn").disabled=true;
+ }
+}
+
+function cleanup(){
+ if(displayStream)displayStream.getTracks().forEach(t=>t.stop());
+ if(micStream)micStream.getTracks().forEach(t=>t.stop());
+ if(audioContext)audioContext.close().catch(()=>{});
+ displayStream=null;micStream=null;audioContext=null;
+}
+
+async function processRecording(){
+ try{
+  if(!audioChunks.length)throw new Error("No audio data was recorded.");
+  const blob=new Blob(audioChunks,{type:audioChunks[0].type||"audio/webm"});
+  const sizeMB=blob.size/1048576;
+  status(`Recording captured (${sizeMB.toFixed(2)} MB). Sending source-separated audio to Deepgram...`,"info");
+
+  const model="nova-3";
+  const language=document.getElementById("language").value;
+  const keyterms=(document.getElementById("keyterms")?.value||"")
+    .split(/[\n,;]+/)
+    .map(s=>s.trim())
+    .filter(Boolean)
+    .filter((v,i,a)=>a.indexOf(v)===i);
+
+  const params=new URLSearchParams({model,language,smart_format:"false",filler_words:"true",multichannel:"true",utterances:"true",words:"true",punctuate:"false"});
+  keyterms.forEach(k=>params.append("keyterm",k));
+
+  const endpoint=`https://api.deepgram.com/v1/listen?${params.toString()}`;
+  const requestStarted=performance.now();
+
+  const response=await fetch(endpoint,{
+   method:"POST",
+   headers:{
+    "Authorization":`Token ${document.getElementById("apiKey").value.trim()}`,
+    "Content-Type":blob.type||"audio/webm"
+   },
+   body:blob
+  });
+
+  const requestMs=Math.round(performance.now()-requestStarted);
+  const rawText=await response.text();
+  let result;
+  try{result=JSON.parse(rawText)}catch{throw new Error(`Deepgram returned non-JSON (${response.status}): ${rawText.slice(0,500)}`)}
+  if(!response.ok){
+   const message=result.err_msg||result.message||result.error||`HTTP ${response.status}`;
+   throw new Error(`Deepgram request failed: ${message}`);
+  }
+
+  lastDeepgram=result;
+   lastAudioBlob=blob;
+  lastIBIS=buildIBISEvidence(result,{
+   request:{
+    endpoint,http_status:response.status,elapsed_ms:requestMs,
+    recorded_duration_seconds:getDurationSeconds(),
+    audio_size_bytes:blob.size,audio_mime_type:blob.type||"audio/webm",
+    deepgram_config:{model,language,smart_format:false,filler_words:true,punctuate:false,multichannel:true,utterances:true,words:true,keyterms:[...keyterms]}
+   },
+   context:{
+    student_name:document.getElementById("studentName").value.trim()||null,
+    lesson_type:document.getElementById("lessonType").value,
+    topic:document.getElementById("topic").value.trim()||null,
+     keyterms,
+    source_mapping:{
+      channel_0:sourceSwap?"student_tab":"teacher_microphone",
+      channel_1:sourceSwap?"teacher_microphone":"student_tab",
+      authoritative:true
+    }
+   }
+  });
+
+  renderResults(result,lastIBIS,requestMs,sizeMB);
+  const channels=result?.metadata?.channels;
+  const warning=channels===2 ? "" : ` Deepgram reports ${channels??"an unknown number of"} channel(s); expected 2.`;
+  status(`✅ Deepgram returned HTTP ${response.status}. Source-separated evidence preserved.${warning}`,"success");
+ }catch(e){console.error(e);status("Processing error: "+e.message,"error")}
+}
+
+function getChannelUtterances(result){
+ const utterances=result?.results?.utterances||[];
+ return utterances.map((u,i)=>({
+   ...u,
+   _channel:u.channel==null?null:Number(u.channel),
+   _id:u.id||`U${String(i+1).padStart(4,"0")}`
+ })).filter(u=>u._channel!=null);
+}
+
+function getChannelAlternatives(result){
+ const channels=result?.results?.channels||[];
+ const out=[];
+ channels.forEach((ch,ci)=>{
+   const alt=ch?.alternatives?.[0]||{};
+   out.push({
+     channel:ci,
+     transcript:alt.transcript||"",
+     confidence:Number(alt.confidence)||0,
+     words:alt.words||[]
+   });
+ });
+ return out;
+}
+
+function speakerFromChannel(ch){
+ const n=Number(ch);
+ if(!sourceSwap) return n===0?"teacher":n===1?"student":"unknown";
+ return n===0?"student":n===1?"teacher":"unknown";
+}
+
+function normToken(s){return String(s||'').toLowerCase().replace(/[^a-z0-9']/g,'')}
+function levenshtein(a,b){a=normToken(a);b=normToken(b);if(a===b)return 0;if(!a)return b.length;if(!b)return a.length;const prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let cur=[i];for(let j=1;j<=b.length;j++){cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1))}for(let j=0;j<prev.length;j++)prev[j]=cur[j]}return prev[b.length]}
+function similarity(a,b){const x=normToken(a),y=normToken(b);if(!x||!y)return 0;return 1-levenshtein(x,y)/Math.max(x.length,y.length)}
+function phonologicalHint(expected,observed){const a=normToken(expected),b=normToken(observed);if(!a||!b)return 'lexical mismatch';const pairs=[[/^th/,'th→t/d or dental-fricative substitution'],[/th/,'th consonant may have changed'],[/f/,'f/p or labiodental substitution candidate'],[/v/,'v/b or labiodental substitution candidate'],[/^w/,'w/v substitution candidate'],[/^r/,'r/l or rhotic substitution candidate'],[/^l/,'l/r substitution candidate'],[/sh/,'sh/s or palatal fricative substitution candidate'],[/^s/,'s/sh or sibilant substitution candidate'],[/z/,'z/s or voicing substitution candidate']];for(const [re,label] of pairs)if(re.test(a)&&!re.test(b))return label;return 'possible phonological substitution or reduction'}
+function pronunciationCandidates(utterances,keyterms){
+ const students=utterances.filter(u=>u.speaker==='student'),out=[],terms=[...new Set((keyterms||[]).map(x=>String(x).trim()).filter(Boolean))];
+ const add=(o)=>{if(!out.some(x=>x.utterance_id===o.utterance_id&&x.expected===o.expected&&x.observed===o.observed))out.push(o)};
+ for(const u of students){
+  const ws=u.words||[];
+  // Key-term guided candidates: compare expected lexical item against the spoken transcript, but never confirm an error.
+  for(const term of terms){
+   const parts=term.split(/\s+/).filter(Boolean).map(normToken); if(!parts.length)continue;
+   if(parts.length===1){
+    const exact=ws.some(w=>normToken(w.normalized||w.surface||w.word)===parts[0]);
+    if(exact)continue;
+    let best=null;
+    for(const w of ws){const obs=w.surface||w.normalized||w.word||'';const sim=similarity(term,obs);if(sim>=0.55&&(!best||sim>best.sim))best={w,sim}}
+    if(best){const conf=Number(best.w.confidence)||0;add({id:`PC-${u.id}-${parts[0]}-${normToken(best.w.surface||best.w.word)}`,status:'CANDIDATE',evidence_state:'UNREVIEWED',expected:term,observed:best.w.surface||best.w.word,similarity:Number(best.sim.toFixed(3)),word_confidence:conf,utterance_id:u.id,start:Number(best.w.start??u.start)||0,end:Number(best.w.end??u.end)||0,speaker:'student',provider_channel:u.provider_channel,reason:conf<0.8?'Low recognition confidence plus phonologically/orthographically close alternative':'Close alternative to an expected lesson key term',phonological_hint:phonologicalHint(term,best.w.surface||best.w.word),teacher_review:'UNREVIEWED'})}
+   }
+  }
+  // General low-confidence anomalies: useful for finding errors even when no key term was supplied.
+  for(const w of ws){const conf=Number(w.confidence);const obs=w.surface||w.normalized||w.word||'';if(obs&&isFinite(conf)&&conf<0.55){add({id:`LC-${u.id}-${normToken(obs)}-${Math.round((Number(w.start)||0)*100)}`,status:'TRANSCRIPTION_REVIEW',evidence_state:'UNREVIEWED',expected:null,observed:obs,similarity:null,word_confidence:conf,utterance_id:u.id,start:Number(w.start??u.start)||0,end:Number(w.end??u.end)||0,speaker:'student',provider_channel:u.provider_channel,reason:'Low-confidence student word; review audio before deciding whether this is a transcription error or pronunciation issue',phonological_hint:'requires audio review',teacher_review:'UNREVIEWED'})}}
+ }
+ return out.sort((a,b)=>a.start-b.start);
+}
+function renderPronunciationQueue(candidates){
+ const el=document.getElementById('pronunciationQueue');if(!el)return;if(!candidates.length){el.innerHTML='<div class="help">No pronunciation candidates were detected. This does not mean pronunciation was error-free; it means no transcript-based candidate met the conservative review threshold.</div>';return}
+ el.innerHTML=candidates.map((c,i)=>`<div class="pron-item"><div><strong>${escapeHTML(c.expected||'(review word)')}</strong>${c.observed?` → <strong>${escapeHTML(c.observed)}</strong>`:''}</div><div class="meta">${escapeHTML(c.status)} · ${escapeHTML(c.start.toFixed(2))}–${escapeHTML(c.end.toFixed(2))}s · confidence ${isFinite(c.word_confidence)?c.word_confidence.toFixed(2):'—'}${c.similarity!=null?` · similarity ${c.similarity.toFixed(2)}`:''}</div><div class="help">${escapeHTML(c.reason)}${c.phonological_hint?` · ${escapeHTML(c.phonological_hint)}`:''}</div><div class="pron-actions"><button class="secondary" onclick="playPronunciationCandidate(${i})">▶ Play audio</button><button class="secondary" onclick="downloadPronunciationCandidate(${i})">↓ Save clip</button><button class="secondary" onclick="setPronunciationCandidateReview(${i},'CONFIRMED_PRONUNCIATION')">✓ Confirm pronunciation</button><button class="secondary" onclick="setPronunciationCandidateReview(${i},'LIKELY_TRANSCRIPTION_ERROR')">≈ Transcription error</button><button class="secondary" onclick="setPronunciationCandidateReview(${i},'UNCLEAR')">? Unclear</button></div><div class="meta" style="margin-top:5px">Teacher review: ${escapeHTML(c.teacher_review||'UNREVIEWED')}</div></div>`).join('');
+}
+async function decodeRecording(){if(!lastAudioBlob)throw new Error('No recording is available in this session.');const ctx=new AudioContext();try{const buf=await ctx.decodeAudioData(await lastAudioBlob.arrayBuffer());return buf}finally{ctx.close().catch(()=>{})}}
+function audioBufferToWav(buffer,startSec,endSec,channelIndex=1){const sr=buffer.sampleRate;const start=Math.max(0,Math.floor(startSec*sr)),end=Math.min(buffer.length,Math.ceil(endSec*sr)),len=Math.max(0,end-start),ch=Math.min(channelIndex,buffer.numberOfChannels-1);const data=buffer.getChannelData(ch);const out=new ArrayBuffer(44+len*2),view=new DataView(out);const write=(o,str)=>{for(let i=0;i<str.length;i++)view.setUint8(o+i,str.charCodeAt(i))};write(0,'RIFF');view.setUint32(4,36+len*2,true);write(8,'WAVE');write(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sr,true);view.setUint32(28,sr*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);write(36,'data');view.setUint32(40,len*2,true);let off=44;for(let i=start;i<end;i++,off+=2){let x=Math.max(-1,Math.min(1,data[i]));view.setInt16(off,x<0?x*0x8000:x*0x7fff,true)}return new Blob([out],{type:'audio/wav'})}
+async function getPronunciationClip(i){const c=lastIBIS?.pronunciation_review?.candidates?.[i];if(!c)throw new Error('Pronunciation candidate not found.');const b=await decodeRecording();const pad=.18;return audioBufferToWav(b,Math.max(0,c.start-pad),Math.min(b.duration,c.end+pad),speakerFromChannel(c.provider_channel??1)==='student'?(sourceSwap?0:1):(sourceSwap?1:0))}
+function pronunciationReviewSummary(list){const a=Array.isArray(list)?list:[];const confirmed=a.filter(c=>c.teacher_review==='CONFIRMED_PRONUNCIATION').length,tx=a.filter(c=>c.teacher_review==='LIKELY_TRANSCRIPTION_ERROR').length,unclear=a.filter(c=>c.teacher_review==='UNCLEAR').length,pending=a.filter(c=>!c.teacher_review||c.teacher_review==='UNREVIEWED').length,reviewed=confirmed+tx+unclear;return {candidate_count:a.length,confirmed_pronunciation_errors:confirmed,likely_transcription_errors:tx,unclear_reviews:unclear,pending_review:pending,reviewed_count:reviewed,reviewed_issue_rate:reviewed?Number((confirmed/reviewed).toFixed(4)):null,interpretation:confirmed?'Teacher-confirmed pronunciation evidence is present. This is an evidence count, not a proficiency score.':pending?'Pronunciation candidates remain pending teacher review.':'No teacher-confirmed pronunciation issues in the reviewed candidates.'}}
+function setPronunciationCandidateReview(i,status){const c=lastIBIS?.pronunciation_review?.candidates?.[i];if(!c)return;c.teacher_review=status;c.reviewed_at=new Date().toISOString();lastIBIS.pronunciation_review.summary=pronunciationReviewSummary(lastIBIS.pronunciation_review.candidates);renderPronunciationQueue(lastIBIS.pronunciation_review.candidates);renderPronunciationSummary(lastIBIS.pronunciation_review.summary);document.getElementById("ibisJson").textContent=JSON.stringify(lastIBIS,null,2)}
+function renderPronunciationSummary(s){const el=document.getElementById('pronunciationSummary');if(!el)return;const x=s||pronunciationReviewSummary([]);el.innerHTML=[['Candidates',x.candidate_count],['Confirmed pronunciation',x.confirmed_pronunciation_errors],['Transcription errors',x.likely_transcription_errors],['Unclear',x.unclear_reviews],['Pending',x.pending_review]].map(([k,v])=>`<div class="metric"><div class="label">${escapeHTML(k)}</div><div class="value">${escapeHTML(v)}</div></div>`).join('')+(x.reviewed_issue_rate!=null?`<div class="small" style="margin-top:8px">Confirmed among reviewed candidates: ${(x.reviewed_issue_rate*100).toFixed(0)}% — evidence indicator only, not a pronunciation proficiency score.</div>`:'')}
+async function playPronunciationCandidate(i){try{const blob=await getPronunciationClip(i),url=URL.createObjectURL(blob),p=document.getElementById('pronunciationPlayer');p.src=url;p.style.display='block';await p.play()}catch(e){alert('Could not play pronunciation clip: '+e.message)}}
+async function downloadPronunciationCandidate(i){try{const blob=await getPronunciationClip(i),c=lastIBIS.pronunciation_review.candidates[i],a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${lessonFileBase()} - Pronunciation Candidate ${i+1} - ${normToken(c.observed||'word')}.wav`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}catch(e){alert('Could not save pronunciation clip: '+e.message)}}
+function buildIBISEvidence(result,meta){
+ const utterances=getChannelUtterances(result);
+ const alternatives=getChannelAlternatives(result);
+
+ let normalizedUtterances=[];
+ if(utterances.length){
+   normalizedUtterances=utterances.map((u,i)=>({
+    id:u._id,
+    provider_channel:u._channel,
+    speaker:speakerFromChannel(u._channel),
+    start:Number(u.start)||0,
+    end:Number(u.end)||0,
+    duration:Math.max(0,(Number(u.end)||0)-(Number(u.start)||0)),
+    confidence:Number(u.confidence)||0,
+    text:u.transcript||"",
+    words:(u.words||[]).map((w,j)=>({
+      id:`${u._id}-W${j+1}`,
+      surface:w.punctuated_word||w.word||"",
+      normalized:(w.word||"").toLowerCase(),
+      start:Number(w.start)||0,
+      end:Number(w.end)||0,
+      confidence:Number(w.confidence)||0,
+      provider_channel:u._channel
+    }))
+   })).sort((a,b)=>a.start-b.start);
+ }else{
+   // Fallback when the provider returns channel alternatives but no utterance list.
+   normalizedUtterances=alternatives.map((a,i)=>({
+    id:`CH${a.channel}`,
+    provider_channel:a.channel,
+    speaker:speakerFromChannel(a.channel),
+    start:0,end:0,duration:0,confidence:a.confidence,
+    text:a.transcript,
+    words:(a.words||[]).map((w,j)=>({
+      id:`CH${a.channel}-W${j+1}`,
+      surface:w.punctuated_word||w.word||"",
+      normalized:(w.word||"").toLowerCase(),
+      start:Number(w.start)||0,end:Number(w.end)||0,
+      confidence:Number(w.confidence)||0,
+      provider_channel:a.channel
+    }))
+   }));
+ }
+
+ const student=normalizedUtterances.filter(u=>u.speaker==="student");
+ const teacher=normalizedUtterances.filter(u=>u.speaker==="teacher");
+ const studentWords=student.flatMap(u=>u.words);
+ const teacherWords=teacher.flatMap(u=>u.words);
+ const pronunciationCandidatesFound=pronunciationCandidates(normalizedUtterances,meta.context.keyterms||[]);
+
+ const chCount=Number(result?.metadata?.channels)||alternatives.length||null;
+
+ return {
+  ibis:{
+   framework_version:"1.0",
+   pipeline_version:"recorder-3.1.7-source-separated-pronunciation-candidates",
+   evidence_only:true,
+   speaker_identity_mode:"source_channel_authoritative",
+   created_at:new Date().toISOString()
+  },
+  lesson:meta.context,
+  recording:meta.request,
+  deepgram:{
+   request_id:result?.metadata?.request_id||null,
+   model:result?.metadata?.model_info||null,
+   metadata:result?.metadata||{}
+  },
+  transcript:{
+   utterances:normalizedUtterances,
+   speaker_transcript:normalizedUtterances.map(u=>`[${u.speaker.toUpperCase()}] ${u.text}`).join("\n"),
+   channel_alternatives:alternatives
+  },
+  objective_metrics:{
+   provider_channels:chCount,
+   lesson_duration_seconds:Number(result?.metadata?.duration)||meta.request.recorded_duration_seconds,
+   student_speaking_seconds:student.reduce((a,u)=>a+u.duration,0),
+   teacher_speaking_seconds:teacher.reduce((a,u)=>a+u.duration,0),
+   student_words:studentWords.length,
+   teacher_words:teacherWords.length,
+   student_turns:student.length,
+   teacher_turns:teacher.length,
+   student_talk_share:share(student.reduce((a,u)=>a+u.duration,0),teacher.reduce((a,u)=>a+u.duration,0))
+  },
+  pronunciation_review:{
+   status:pronunciationCandidatesFound.length?"CANDIDATES_FOR_AUDIO_REVIEW":"NO_CANDIDATES_DETECTED",
+   methodology:"Conservative transcript-based candidate detection only; no candidate is a confirmed pronunciation error until the original audio is reviewed.",
+   candidates:pronunciationCandidatesFound,
+   summary:pronunciationReviewSummary(pronunciationCandidatesFound)
+  },
+  analysis_status:{
+   raw_evidence_preserved:true,
+   linguistic_analysis:"not yet run",
+   pedagogical_interpretation:"not yet run",
+   longitudinal_merge:"not yet run"
+  },
+  raw_deepgram:result
+ };
+}
+
+function share(a,b){return a+b?Number((a/(a+b)).toFixed(4)):0}
+function countFillers(words){const fillers=new Set(["uh","um","mhmm","mm-mm","uh-uh","uh-huh","nuh-uh"]);return (words||[]).filter(w=>fillers.has(String(w.normalized||w.word||"").toLowerCase())).length}
+function countRepeatedTokens(words){let n=0,last="";for(const w of (words||[])){const cur=String(w.normalized||w.word||"").toLowerCase();if(cur&&cur===last)n++;last=cur}return n}
+function sumPauses(utterances){let total=0,lastEnd=null;for(const u of (utterances||[]).sort((a,b)=>a.start-b.start)){if(lastEnd!=null&&u.start>lastEnd)total+=u.start-lastEnd;lastEnd=Math.max(lastEnd??0,u.end)}return Number(total.toFixed(2))}
+
+function renderResults(result,ibis,ms,sizeMB){
+ document.getElementById("results").style.display="block";
+ const r=result||{},m=ibis.objective_metrics;
+ document.getElementById("requestMetrics").innerHTML=[
+  ["HTTP status",r?"200":"—"],
+  ["Channels reported",m.provider_channels??"—"],
+  ["Request ID",result?.metadata?.request_id||"Not exposed"],
+  ["Processing time",ms+" ms"],
+  ["Audio size",sizeMB.toFixed(2)+" MB"],
+  ["Student words",m.student_words],
+  ["Student talk share",(m.student_talk_share*100).toFixed(1)+"%"]
+ ].map(x=>`<div class="metric"><div class="label">${escapeHTML(x[0])}</div><div class="value">${escapeHTML(x[1])}</div></div>`).join("");
+
+ renderPronunciationQueue(ibis.pronunciation_review?.candidates||[]);
+ renderPronunciationSummary(ibis.pronunciation_review?.summary||pronunciationReviewSummary(ibis.pronunciation_review?.candidates||[]));
+ document.getElementById("transcript").textContent=ibis.transcript.speaker_transcript||"(No source-separated utterances returned.)";
+ document.getElementById("deepgramJson").textContent=JSON.stringify(result,null,2);
+ document.getElementById("ibisJson").textContent=JSON.stringify(ibis,null,2);
+ document.getElementById("results").scrollIntoView({behavior:"smooth"});
+}
+function escapeHTML(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function saveBlob(text,name,type){
+ const b=new Blob([text],{type}),u=URL.createObjectURL(b),a=document.createElement("a");
+ a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+}
+function lessonFileBase(){
+ const raw=document.getElementById("studentName")?.value.trim()||"Lesson";
+ const safe=raw.replace(/[^a-zA-Z0-9 _.-]+/g," ").replace(/\s+/g," ").trim().replace(/[ .]+$/g,"")||"Lesson";
+ const date=new Date().toISOString().slice(0,10);
+ return `${safe} - ${date}`;
+}
+function sendEvidenceToIBIS(){
+ if(!lastIBIS){alert('Complete a recording and receive a Deepgram response before sending evidence to IBIS.');return;}
+ const rawName=String(lastIBIS.lesson?.student_name||'').replace(/\s*-\s*Preply lesson\s*$/i,'').trim();
+ const payload={schema:'ibis-recorder-handoff-v1',createdAt:new Date().toISOString(),date:new Date().toISOString().slice(0,10),studentName:rawName,filename:`Recorder Evidence - ${rawName||'Unassigned'} - ${new Date().toISOString().slice(0,10)}.json`,evidence:lastIBIS};
+ try{localStorage.setItem('ibisRecorderEvidenceHandoff',JSON.stringify(payload));alert('Evidence queued for IBIS. Switch to IBIS Teacher Core on the same website origin, open Reports, and click “Import Recorder Evidence”.');}catch(e){alert('Could not queue evidence in browser storage: '+(e?.message||e)+'. Use Download IBIS Evidence JSON and import the file manually instead.');}
+}
+function downloadIBIS(){
+ if(!lastIBIS){alert("No evidence package available yet.");return}
+ saveBlob(JSON.stringify(lastIBIS,null,2),`${lessonFileBase()} - IBIS Evidence.json`,"application/json");
+}
+function downloadDeepgram(){
+ if(!lastDeepgram){alert("No Deepgram response available yet.");return}
+ saveBlob(JSON.stringify(lastDeepgram,null,2),`${lessonFileBase()} - Deepgram Raw.json`,"application/json");
+}
+function downloadRecording(){
+ if(!lastAudioBlob){alert("No recording is available yet.");return}
+ const u=URL.createObjectURL(lastAudioBlob),a=document.createElement("a");
+ a.href=u;a.download=`${lessonFileBase()} - Source Separated Recording.webm`;a.click();
+ setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+</script>
+</body>
+</html>

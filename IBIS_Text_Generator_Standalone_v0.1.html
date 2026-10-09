@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IBIS Text Generator — Standalone</title>
+<style>
+:root{--bg:#0c1118;--panel:#141d28;--panel2:#192433;--line:#2b3a4d;--text:#eaf0f7;--muted:#a5b2c2;--gold:#f0ce63;--teal:#65d4bf;--blue:#8cbcff;--radius:16px}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#1a2b3d 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:24px clamp(18px,4vw,54px) 20px;border-bottom:1px solid var(--line);background:#0c1118e8;position:sticky;top:0;z-index:5;backdrop-filter:blur(14px)}
+.brand{display:flex;gap:13px;align-items:center}.logo{width:45px;height:45px;border-radius:13px;background:linear-gradient(145deg,#f0ce63,#b58d35);color:#18202a;display:grid;place-items:center;font-weight:900;font-size:20px;box-shadow:0 7px 22px #0004}
+h1{font-size:clamp(22px,3vw,31px);line-height:1.15;margin:0;letter-spacing:-.7px}.subtitle{color:var(--muted);margin:5px 0 0;font-size:13px}.version{margin-left:auto;border:1px solid #3d536a;color:var(--teal);border-radius:999px;padding:4px 10px;font-size:11px;white-space:nowrap}
+main{max-width:1500px;margin:auto;padding:25px clamp(14px,3vw,42px) 55px}.intro{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:22px}.intro p{color:var(--muted);max-width:850px;margin:5px 0}.status{font-size:12px;color:var(--teal);border:1px solid #285c55;background:#122a2a;padding:8px 11px;border-radius:10px;white-space:nowrap}
+.layout{display:grid;grid-template-columns:minmax(310px,410px) minmax(0,1fr);gap:20px;align-items:start}.panel{background:linear-gradient(160deg,#172230,#111923);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:0 14px 36px #0002}.panelhead{padding:17px 19px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}.panelhead h2{font-size:16px;margin:0}.panelbody{padding:19px}.section-label{font-size:11px;color:var(--teal);text-transform:uppercase;letter-spacing:1.3px;font-weight:800;margin:0 0 12px}.field{margin-bottom:15px}.field label{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#c7d2df;font-weight:700;margin-bottom:6px}.hint{font-size:11px;color:var(--muted);font-weight:400}
+input,select,textarea{width:100%;background:#0d151e;border:1px solid #33465b;border-radius:9px;padding:10px 11px;color:var(--text);font:inherit;font-size:13px;outline:none}input:focus,select:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px #65d4bf18}textarea{resize:vertical;min-height:80px}.two{display:grid;grid-template-columns:1fr 1fr;gap:11px}.four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.choice{border:1px solid #33465b;background:#0d151e;color:var(--muted);border-radius:8px;padding:9px 4px;cursor:pointer;font-size:12px}.choice.active{border-color:var(--gold);background:#3b3219;color:var(--gold);font-weight:800}.choice small{display:block;font-size:10px;font-weight:400;margin-top:2px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}.check{display:flex;align-items:center;gap:8px;border:1px solid #33465b;background:#0d151e;border-radius:8px;padding:9px;font-size:12px;color:#c7d2df}.check input{width:auto;accent-color:#65d4bf}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.btn{border:1px solid var(--line);background:#202d3c;color:var(--text);padding:10px 14px;border-radius:9px;cursor:pointer;font-weight:750;font-size:12px}.btn.primary{background:var(--gold);color:#17202a;border-color:var(--gold)}.btn.secondary{border-color:#326a60;background:#17332f;color:var(--teal)}.btn:hover{filter:brightness(1.1)}
+.right{display:grid;gap:18px}.callout{border:1px solid #66552b;background:#2a2415;border-radius:11px;padding:12px 14px;color:#e7d9b2;font-size:12px}.callout strong{color:var(--gold)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:8px 10px;cursor:pointer;font:inherit;font-size:12px}.tab.active{color:var(--gold);border-color:var(--gold);font-weight:800}
+.output{width:100%;min-height:500px;background:#0c141d;border:1px solid #293a4d;border-radius:11px;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;color:#d8e2ee;line-height:1.65}.output.empty{display:flex;align-items:center;justify-content:center;text-align:center;color:#8493a5;white-space:normal}
+.editor{width:100%;min-height:430px;font-size:13px;line-height:1.65}.mini-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}.mini{border:1px solid var(--line);background:#101923;border-radius:10px;padding:11px}.mini span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.8px}.mini b{display:block;margin-top:3px;font-size:13px;color:var(--gold)}
+.hidden{display:none!important}.pill{border:1px solid #3d536a;border-radius:999px;padding:3px 8px;color:var(--blue);font-size:10px}.footer-note{color:var(--muted);font-size:11px;margin-top:16px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.intro{align-items:flex-start;flex-direction:column}.status{align-self:flex-start}.mini-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.two,.checks{grid-template-columns:1fr}.four{grid-template-columns:1fr 1fr}.panelbody{padding:14px}}
+</style>
+</head>
+<body>
+<header><div class="brand"><div class="logo">IB</div><div><h1>IBIS Text Generator</h1><p class="subtitle">Standalone ESL Reading Text & Materials Prompt Builder</p></div><span class="version">STANDALONE · 0.1</span></div></header>
+<main>
+<div class="intro"><div><h2 style="margin:0;font-size:21px">Build the text around the learner.</h2><p>Use the same high-control IBIS approach as Teaching Studio, but concentrate on producing a strong learner text: topic, CEFR, word count, lexical complexity, style, audience, purpose and optional support materials.</p></div><div class="status">● Independent module</div></div>
+
+<div class="layout">
+<section class="panel"><div class="panelhead"><h2>Text specification</h2><span class="pill">Step 1 · Configure</span></div><div class="panelbody">
+
+<p class="section-label">Core brief</p>
+<div class="field"><label for="topic">Topic / subject <span class="hint">Required</span></label><input id="topic" placeholder="e.g. Cancel culture, inventions, social media, sleep"></div>
+
+<div class="two">
+<div class="field"><label for="level">English level</label><select id="level">
+<option>Basic / A1</option><option>Elementary / A2</option><option selected>Pre-intermediate / B1</option><option>Intermediate / B1+</option><option>Upper-intermediate / B2</option><option>Advanced / C1</option><option>Proficient / C2</option></select></div>
+<div class="field"><label for="age">Learner age group</label><select id="age">
+<option>Young children (6–8)</option><option>Children (9–12)</option><option>Teenagers (13–17)</option><option selected>Adults (18+)</option><option>Mixed / adapt</option></select></div>
+</div>
+
+<div class="field"><label>Reading text length <span class="hint">Target word count</span></label>
+<div class="four" id="lengthChoices"><button class="choice" data-v="300">300</button><button class="choice" data-v="500">500</button><button class="choice active" data-v="1000">1,000</button><button class="choice" data-v="custom">Custom</button></div>
+<div id="customWrap" class="field hidden" style="margin:9px 0 0"><label for="customWords">Custom word count</label><input type="number" id="customWords" min="100" max="5000" value="750"></div></div>
+
+<div class="field"><label>Language complexity <span class="hint">Separate from CEFR</span></label>
+<div class="four" id="complexityChoices"><button class="choice" data-v="Low">Low<small>Common words</small></button><button class="choice active" data-v="Mid">Mid<small>Everyday range</small></button><button class="choice" data-v="High">High<small>Richer language</small></button><button class="choice" data-v="Advanced">Advanced<small>Nuanced / dense</small></button></div>
+<p class="hint">CEFR controls overall accessibility. Complexity controls lexical richness, density and sophistication without silently raising grammatical difficulty.</p></div>
+
+<div class="two">
+<div class="field"><label for="style">Text style</label><select id="style"><option selected>Everyday journalistic</option><option>Friendly and conversational</option><option>Story / narrative</option><option>Informative / explanatory</option><option>Debate with balanced perspectives</option><option>Professional / workplace</option><option>Academic but accessible</option><option>Magazine / feature article</option><option>Custom</option></select></div>
+<div class="field"><label for="purpose">Primary purpose</label><select id="purpose"><option selected>Reading comprehension</option><option>Discussion / speaking</option><option>Vocabulary development</option><option>Grammar in context</option><option>Critical thinking</option><option>Exam preparation</option><option>General lesson text</option></select></div>
+</div>
+
+<div class="two">
+<div class="field"><label for="grammar">Target grammar / language point <span class="hint">Optional</span></label><input id="grammar" placeholder="e.g. conditionals, past tenses"></div>
+<div class="field"><label for="tone">Tone</label><select id="tone"><option>Neutral</option><option selected>Natural and engaging</option><option>Thought-provoking</option><option>Warm and accessible</option><option>Professional</option><option>Serious / formal</option><option>Light / humorous</option></select></div>
+</div>
+
+<div class="field"><label for="objectives">Learning objectives <span class="hint">Optional</span></label><textarea id="objectives" placeholder="What should the learner understand, discuss or practise after reading?"></textarea></div>
+<div class="field"><label for="learnerNotes">Learner notes / known difficulties</label><textarea id="learnerNotes" placeholder="Interests, recurring errors, confidence, vocabulary gaps, cultural context, accessibility needs…"></textarea></div>
+<div class="field"><label for="instructions">Additional instructions</label><textarea id="instructions" placeholder="Points to include, facts to avoid, preferred structure, vocabulary, examples, cultural context, things to avoid…"></textarea></div>
+
+<p class="section-label">Optional support materials</p>
+<div class="checks">
+<label class="check"><input type="checkbox" id="vocab" checked> Vocabulary bank</label>
+<label class="check"><input type="checkbox" id="questions" checked> Comprehension questions</label>
+<label class="check"><input type="checkbox" id="discussion" checked> Discussion questions</label>
+<label class="check"><input type="checkbox" id="grammarPractice"> Grammar practice</label>
+<label class="check"><input type="checkbox" id="teacherNotes"> Teacher notes</label>
+<label class="check"><input type="checkbox" id="answerKey" checked> Answer key</label>
+</div>
+
+<div class="actions"><button class="btn primary" id="build">Build text prompt ↗</button><button class="btn" id="reset">Reset</button></div>
+<p class="hint" id="status">Ready. The generator creates an editable, detailed prompt; it does not require an API key.</p>
+</div></section>
+
+<section class="right">
+<div class="callout"><strong>IBIS principle:</strong> lexical complexity and CEFR level remain separate controls. A B1 text can be made richer and more interesting without turning it into a B2 grammar exercise.</div>
+<div class="panel"><div class="panelhead"><h2>Text Generator Workspace</h2><span class="pill" id="state">Awaiting specification</span></div><div class="panelbody">
+<div class="mini-grid"><div class="mini"><span>Target</span><b id="sumWords">1,000 words</b></div><div class="mini"><span>Complexity</span><b id="sumComplexity">Mid</b></div><div class="mini"><span>Level</span><b id="sumLevel">B1</b></div><div class="mini"><span>Support</span><b id="sumSupport">6 items</b></div></div>
+<div class="tabs"><button class="tab active" data-tab="prompt">AI Prompt</button><button class="tab" data-tab="brief">Specification</button><button class="tab" data-tab="text">Text Editor</button></div>
+<div id="promptPanel"><textarea class="editor" id="prompt" placeholder="Your detailed text-generation prompt will appear here."></textarea><div class="actions"><button class="btn secondary" id="copy">Copy prompt</button><button class="btn" id="downloadPrompt">Download prompt .txt</button></div></div>
+<div id="briefPanel" class="hidden"><div class="output" id="brief"></div><div class="actions"><button class="btn" id="downloadBrief">Download specification .txt</button></div></div>
+<div id="textPanel" class="hidden"><textarea class="editor" id="text" placeholder="Paste the generated text here for editing and reuse."></textarea><div class="actions"><button class="btn secondary" id="copyText">Copy text</button><button class="btn" id="downloadText">Download text .txt</button><button class="btn" id="exportHtml">Export HTML</button></div></div>
+<p class="footer-note">Suggested workflow: build prompt → run it in your chosen AI assistant → paste the result into Text Editor → refine → export.</p>
+</div></div>
+</section>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let words='1000',complexity='Mid';
+
+function wordCount(){return words==='custom'?Math.max(100,Math.min(5000,Number($('customWords').value)||750)):Number(words)}
+function cefr(){let m=$('level').value.match(/A1|A2|B1\+|B1|B2|C1|C2/);return m?m[0]:$('level').value}
+function guide(c){return {Low:'Use highly frequent, concrete vocabulary; short and direct phrasing; low idiom density; explain unavoidable topic terms.',Mid:'Use a balanced mix of common and moderately specific vocabulary; natural collocations; occasional less familiar terms made clear by context.',High:'Use a richer range of precise vocabulary, varied collocations and some less frequent expressions; support meaning through context and avoid needless obscurity.',Advanced:'Use nuanced, precise and less frequent vocabulary, varied collocations and greater lexical density; allow subtle distinctions while keeping the text coherent and purposeful.'}[c]}
+function supports(){let a=[];if($('vocab').checked)a.push('vocabulary bank');if($('questions').checked)a.push('comprehension questions');if($('discussion').checked)a.push('discussion questions');if($('grammarPractice').checked)a.push('grammar practice');if($('teacherNotes').checked)a.push('teacher notes');if($('answerKey').checked)a.push('answer key');return a}
+function gather(){return {topic:$('topic').value.trim(),level:$('level').value,cefr:cefr(),age:$('age').value,words:wordCount(),complexity,style:$('style').value,purpose:$('purpose').value,grammar:$('grammar').value.trim(),tone:$('tone').value,objectives:$('objectives').value.trim(),learner:$('learnerNotes').value.trim(),instructions:$('instructions').value.trim(),supports:supports()}}
+function buildPrompt(d){return `You are an experienced English-language teacher, ESL materials designer and skilled educational writer. Create the actual learner-ready reading text and any requested supporting materials below. Do not describe what you would create. Create it.
+
+TEXT SPECIFICATION
+Topic / subject: ${d.topic}
+Learner level: ${d.level} (CEFR reference: ${d.cefr})
+Learner age group: ${d.age}
+Main text target: approximately ${d.words} words; aim within ±5% and count the main text itself, not headings, questions or vocabulary notes.
+Language complexity: ${d.complexity}
+Complexity guidance: ${guide(d.complexity)}
+Text style: ${d.style}
+Primary purpose: ${d.purpose}
+Tone: ${d.tone}
+Target grammar / language point: ${d.grammar||'None specified; choose only if it naturally supports the text.'}
+Learning objectives: ${d.objectives||'Propose 2–4 sensible objectives based on the topic and level.'}
+Learner notes: ${d.learner||'None supplied.'}
+Additional instructions: ${d.instructions||'None supplied.'}
+Requested support materials: ${d.supports.length?d.supports.join(', '):'Main text only'}
+
+NON-NEGOTIABLE QUALITY RULES
+1. Treat CEFR level and lexical complexity as separate controls. Keep grammar, syntax and discourse appropriate to ${d.cefr}. If complexity is High or Advanced, increase lexical richness, precision, collocations and density without silently turning the text into a higher-CEFR grammar exercise.
+2. Write natural, coherent English for real learners. Avoid textbook-sounding filler, artificial examples and repetitive sentence patterns.
+3. Make the text purposeful and interesting enough to support genuine reading and discussion.
+4. Introduce useful vocabulary naturally through context. Do not overload the text with obscure words simply to make it look advanced.
+5. If the topic is controversial or debatable, present meaningful perspectives fairly and avoid forcing a simplistic conclusion unless the instructions explicitly require one.
+6. Do not invent statistics, quotations, studies or factual claims. If specialist or current information is necessary and cannot be verified, phrase it cautiously or flag it for teacher verification.
+7. Keep paragraphing clear and useful for a learner. Use a strong title and appropriate subheadings where they improve readability.
+8. Avoid unnecessary academic jargon. Explain essential specialist terms naturally in context.
+9. Respect the requested age group, cultural sensitivity and learner notes.
+10. The main text should feel like a real article, story, explanation or feature—not a list of language exercises.
+11. At the end of the main text, give an approximate word count for the main text only.
+
+OUTPUT ORDER
+A. TITLE
+B. LEARNER-FACING READING TEXT — approximately ${d.words} words
+${d.supports.includes('vocabulary bank')?'C. VOCABULARY BANK — 8–14 useful items scaled to level and text length; include part of speech, learner-friendly meaning, example and collocation where useful.':''}
+${d.supports.includes('comprehension questions')?'D. COMPREHENSION — include gist, detail and inference questions with answers.':''}
+${d.supports.includes('discussion questions')?'E. DISCUSSION / PERSONALISATION — meaningful questions that move from understanding to opinion, experience or application.':''}
+${d.supports.includes('grammar practice')?'F. LANGUAGE / GRAMMAR PRACTICE — connect the target language naturally to the text; include a short explanation, controlled practice and answers.':''}
+${d.supports.includes('teacher notes')?'G. TEACHER NOTES — concise guidance on likely difficulties, useful follow-up questions and teaching suggestions.':''}
+${d.supports.includes('answer key')?'H. ANSWER KEY — clearly separated from student-facing material.':''}
+
+Do not silently omit requested sections. If a requested element would be inappropriate for the level or topic, adapt it intelligently and explain the adaptation briefly.`}
+function build(){
+ const d=gather(); if(!d.topic){$('topic').focus();$('status').textContent='Please enter a topic first.';return}
+ $('prompt').value=buildPrompt(d);
+ $('brief').textContent=`IBIS TEXT GENERATOR — SPECIFICATION
+
+TOPIC: ${d.topic}
+LEVEL: ${d.level} (${d.cefr})
+AGE GROUP: ${d.age}
+TEXT TARGET: ${d.words} words
+LANGUAGE COMPLEXITY: ${d.complexity}
+COMPLEXITY GUIDANCE: ${guide(d.complexity)}
+TEXT STYLE: ${d.style}
+PRIMARY PURPOSE: ${d.purpose}
+TONE: ${d.tone}
+TARGET LANGUAGE POINT: ${d.grammar||'None specified'}
+LEARNING OBJECTIVES: ${d.objectives||'To be proposed'}
+LEARNER NOTES: ${d.learner||'None supplied'}
+ADDITIONAL INSTRUCTIONS: ${d.instructions||'None supplied'}
+SUPPORT MATERIALS: ${d.supports.join(', ')||'Main text only'}
+
+CORE PRINCIPLE:
+CEFR level controls overall accessibility. Language complexity controls lexical richness and density independently.
+
+OUTPUT:
+Main learner-ready text plus the selected support materials.`;
+ $('state').textContent='Prompt ready';$('sumWords').textContent=d.words.toLocaleString()+' words';$('sumComplexity').textContent=d.complexity;$('sumLevel').textContent=d.cefr;$('sumSupport').textContent=d.supports.length+' items';$('status').textContent='Prompt built. Copy it into your chosen AI workflow, then paste the result into Text Editor.'
+}
+function tab(n){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===n));['prompt','brief','text'].forEach(x=>$(x+'Panel').classList.toggle('hidden',x!==n))}
+document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>tab(x.dataset.tab));
+document.querySelectorAll('#lengthChoices .choice').forEach(b=>b.onclick=()=>{words=b.dataset.v;document.querySelectorAll('#lengthChoices .choice').forEach(x=>x.classList.toggle('active',x===b));$('customWrap').classList.toggle('hidden',words!=='custom');$('sumWords').textContent=wordCount().toLocaleString()+' words'});
+document.querySelectorAll('#complexityChoices .choice').forEach(b=>b.onclick=()=>{complexity=b.dataset.v;document.querySelectorAll('#complexityChoices .choice').forEach(x=>x.classList.toggle('active',x===b));$('sumComplexity').textContent=complexity});
+$('customWords').oninput=()=>$('sumWords').textContent=wordCount().toLocaleString()+' words';
+$('build').onclick=build;
+$('reset').onclick=()=>{if(!confirm('Reset all text specifications?'))return;['topic','grammar','objectives','learnerNotes','instructions','customWords'].forEach(id=>$(id).value='');$('level').value='Pre-intermediate / B1';$('age').value='Adults (18+)';$('style').value='Everyday journalistic';$('purpose').value='Reading comprehension';$('tone').value='Natural and engaging';words='1000';complexity='Mid';document.querySelectorAll('#lengthChoices .choice').forEach((x,i)=>x.classList.toggle('active',i===2));document.querySelectorAll('#complexityChoices .choice').forEach((x,i)=>x.classList.toggle('active',i===1));$('customWrap').classList.add('hidden');$('status').textContent='Form reset.'};
+async function copy(id,msg){try{await navigator.clipboard.writeText($(id).value||$(id).textContent);$('status').textContent=msg}catch(e){$(id).focus();$(id).select?.();$('status').textContent='Clipboard access unavailable; text selected.'}}
+function download(name,text,type='text/plain'){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$('copy').onclick=()=>copy('prompt','Prompt copied.');
+$('downloadPrompt').onclick=()=>download('IBIS_Text_Generator_Prompt.txt',$('prompt').value);
+$('downloadBrief').onclick=()=>download('IBIS_Text_Generator_Specification.txt',$('brief').textContent);
+$('copyText').onclick=()=>copy('text','Text copied.');
+$('downloadText').onclick=()=>download('IBIS_Generated_Text.txt',$('text').value);
+$('exportHtml').onclick=()=>{let title=$('topic').value.trim()||'IBIS Generated Text';let safe=title.replace(/[<>&"]/g,'');let body=$('text').value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');let doc=`<!doctype html><html><head><meta charset="utf-8"><title>${safe}</title><style>body{font:16px/1.7 system-ui,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;color:#202833}h1{border-bottom:2px solid #d6b64d;padding-bottom:12px}pre{white-space:pre-wrap;font:inherit}</style></head><body><h1>${safe}</h1><pre>${body}</pre></body></html>`;download('IBIS_Text.html',doc,'text/html')};
+</script>
+</body>
+</html>
