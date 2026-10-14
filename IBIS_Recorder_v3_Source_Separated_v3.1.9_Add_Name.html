@@ -56,7 +56,7 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:440px;overflow:auto;ba
 <div class="section-title">API & Lesson Configuration</div>
 <div class="grid">
 <div><label for="apiKey">Deepgram API Key</label><input id="apiKey" type="password" placeholder="Enter Deepgram API key"><div class="help">Stored locally in this browser. The key is sent directly to Deepgram from this page.</div></div>
-<div><label for="studentName">Student / lesson summary</label><select id="studentName" required><option value="">Select student / lesson summary…</option><option value="Alexander S. - Preply lesson">Alexander S. - Preply lesson</option><option value="Alexey - Preply lesson">Alexey - Preply lesson</option><option value="Alfredo - Preply lesson">Alfredo - Preply lesson</option><option value="Ana - Preply lesson">Ana - Preply lesson</option><option value="David L. - Preply lesson">David L. - Preply lesson</option><option value="FRANCISCO - Preply lesson">FRANCISCO - Preply lesson</option><option value="Gabi P. - Preply lesson">Gabi P. - Preply lesson</option><option value="Gerard M. - Preply lesson">Gerard M. - Preply lesson</option><option value="Joel - Preply lesson">Joel - Preply lesson</option><option value="jose luis - Preply lesson">jose luis - Preply lesson</option><option value="Laura - Preply lesson">Laura - Preply lesson</option><option value="Luca - Preply lesson">Luca - Preply lesson</option><option value="Luiz J. - Preply lesson">Luiz J. - Preply lesson</option><option value="Maria A. - Preply lesson">Maria A. - Preply lesson</option><option value="Miguel - Preply lesson">Miguel - Preply lesson</option><option value="Pablo G. - Preply lesson">Pablo G. - Preply lesson</option><option value="Pierina F. - Preply lesson">Pierina F. - Preply lesson</option><option value="Samantha - Preply lesson">Samantha - Preply lesson</option><option value="Sandra - Preply lesson">Sandra - Preply lesson</option><option value="Sergio - Preply lesson">Sergio - Preply lesson</option></select><button type="button" id="addNameBtn" style="margin-top:8px" onclick="addStudentName()">＋ Add Name</button><div class="help">Choose a Summary from the IBIS Weekly Register, or add a name for future use. Custom names are saved in this browser.</div></div>
+<div><label for="studentName">Student / lesson summary</label><select id="studentName" required><option value="">Select student / lesson summary…</option><option value="Alexander S. - Preply lesson">Alexander S. - Preply lesson</option><option value="Alexey - Preply lesson">Alexey - Preply lesson</option><option value="Alfredo - Preply lesson">Alfredo - Preply lesson</option><option value="Ana - Preply lesson">Ana - Preply lesson</option><option value="David L. - Preply lesson">David L. - Preply lesson</option><option value="FRANCISCO - Preply lesson">FRANCISCO - Preply lesson</option><option value="Gabi P. - Preply lesson">Gabi P. - Preply lesson</option><option value="Gerard M. - Preply lesson">Gerard M. - Preply lesson</option><option value="Joel - Preply lesson">Joel - Preply lesson</option><option value="jose luis - Preply lesson">jose luis - Preply lesson</option><option value="Laura - Preply lesson">Laura - Preply lesson</option><option value="Luca - Preply lesson">Luca - Preply lesson</option><option value="Luiz J. - Preply lesson">Luiz J. - Preply lesson</option><option value="Maria A. - Preply lesson">Maria A. - Preply lesson</option><option value="Miguel - Preply lesson">Miguel - Preply lesson</option><option value="Pablo G. - Preply lesson">Pablo G. - Preply lesson</option><option value="Pierina F. - Preply lesson">Pierina F. - Preply lesson</option><option value="Samantha - Preply lesson">Samantha - Preply lesson</option><option value="Sandra - Preply lesson">Sandra - Preply lesson</option><option value="Sergio - Preply lesson">Sergio - Preply lesson</option></select><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" id="importRosterBtn" onclick="document.getElementById('ibisRosterFile').click()">↥ Import Active IBIS Names</button><button type="button" id="addNameBtn" onclick="addStudentName()">＋ Add Name</button><input id="ibisRosterFile" type="file" accept="application/json,.json" style="display:none" onchange="importIBISRoster(event)"></div><div class="help" id="rosterHelp">Import the current active-student roster exported from IBIS Teacher Core. The dropdown will then use canonical active names; merged aliases will be retained for matching imported evidence. Custom names remain available.</div></div>
 <div><label for="lessonType">Lesson Type</label><select id="lessonType"><option>conversation</option><option>grammar</option><option>vocabulary</option><option>exam preparation</option><option>general</option></select></div>
 <div><label for="topic">Topic</label><input id="topic" placeholder="Optional lesson topic"></div>
 <div style="grid-column:1/-1"><label for="keyterms">Lesson key terms</label><input id="keyterms" placeholder="Optional terms/phrases to improve recognition, comma separated"><div class="help">Nova-3 keyterm prompting is used only for these terms. This improves recognition of lesson-specific vocabulary without changing the student speech evidence.</div></div>
@@ -114,6 +114,20 @@ Select the Preply tab and <strong>check Share audio</strong>. Microphone permiss
 <div class="section-title">Recording / Deepgram Verification</div>
 <div id="requestMetrics" class="metrics"></div>
 
+<div class="section" id="speechAnalytics" style="margin-top:16px">
+ <div class="section-title">IBIS Speech & Language Indicators — Prototype</div>
+ <div class="help">These indicators are calculated from source-separated Deepgram words and utterance timings. They are descriptive evidence, not a CEFR score or a pronunciation-accuracy score. Recognition confidence is confidence in transcription, not confidence in the learner.</div>
+ <div id="speechMetrics" class="grid five" style="margin-top:12px"><div class="metric"><div class="label">Status</div><div class="value">Waiting</div></div></div>
+ <div id="speechInterpretation" class="notice" style="margin-top:12px">Process a recording to calculate the initial evidence-based indicators.</div>
+</div>
+
+<div class="section" id="observationAssistant" style="margin-top:18px">
+ <div class="section-title">IBIS Transcript Observation Assistant</div>
+ <div class="help">These are rule-based prompts from the transcript and timing data, not an automated assessment. Each suggestion includes an actual excerpt where available. Confirm, reject, expand, or defer it; do not treat a candidate as a confirmed learner trait.</div>
+ <div id="observationAssistantSummary" class="notice" style="margin-top:10px">Process a recording to generate evidence-linked observation suggestions.</div>
+ <div id="observationSuggestions" style="margin-top:10px"><div class="help">No suggestions yet.</div></div>
+</div>
+
 <div class="pron-review">
  <div class="section-title" style="margin-bottom:8px">Pronunciation Review Queue</div>
  <div class="help">These are <strong>candidates only</strong>. IBIS does not treat a transcription mismatch as a confirmed pronunciation error. Review the original audio before confirming a pronunciation target.</div>
@@ -129,6 +143,21 @@ Select the Preply tab and <strong>check Share audio</strong>. Microphone permiss
 <div style="margin-top:20px">
 <div class="section-title">Preserved Deepgram Response</div>
 <pre id="deepgramJson"></pre>
+</div>
+
+<div class="section" id="decisionLayerPanel" style="margin-top:18px">
+ <div class="section-title">IBIS Teaching Decision Layer</div>
+ <div class="help">Use this after reviewing the recording. Measurements and automated flags remain evidence; the interpretation and teaching decision below are yours. The decision is embedded in the downloaded IBIS JSON and can be imported into Teacher Core.</div>
+ <div class="grid two" style="margin-top:12px">
+  <div><label for="decisionPriority">Priority</label><select id="decisionPriority" onchange="updateDecisionLayer()"><option value="observe">Observe / gather more evidence</option><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+  <div><label for="decisionConfidence">Interpretation confidence</label><select id="decisionConfidence" onchange="updateDecisionLayer()"><option value="low">Low — tentative</option><option value="moderate" selected>Moderate — plausible</option><option value="high">High — repeated / clear evidence</option></select></div>
+  <div><label for="decisionFinding">Finding / trend noticed</label><textarea id="decisionFinding" rows="2" placeholder="What does the evidence appear to show? Separate observation from inference." oninput="updateDecisionLayer()"></textarea></div>
+  <div><label for="decisionInterpretation">Teaching interpretation</label><textarea id="decisionInterpretation" rows="2" placeholder="What might explain this? What remains uncertain?" oninput="updateDecisionLayer()"></textarea></div>
+  <div><label for="decisionAction">Teaching decision / next action</label><textarea id="decisionAction" rows="2" placeholder="What will you teach, practise, model, or observe next?" oninput="updateDecisionLayer()"></textarea></div>
+  <div><label for="decisionMeasure">Follow-up evidence to look for</label><textarea id="decisionMeasure" rows="2" placeholder="What would count as improvement or disconfirm this interpretation?" oninput="updateDecisionLayer()"></textarea></div>
+  <div style="grid-column:1/-1"><label for="decisionStudentSummary">Student-facing goal (plain English)</label><textarea id="decisionStudentSummary" rows="2" placeholder="A positive, practical goal the learner can understand." oninput="updateDecisionLayer()"></textarea></div>
+ </div>
+ <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="decisionIncludeStudent" checked onchange="updateDecisionLayer()"> Include the student-facing goal in the student report</label><button class="primary" onclick="markDecisionReviewed()">Mark decision reviewed</button><span id="decisionReviewStatus" class="help">Decision not yet reviewed</span></div>
 </div>
 
 <div style="margin-top:20px">
@@ -151,6 +180,7 @@ Select the Preply tab and <strong>check Share audio</strong>. Microphone permiss
 let mediaRecorder=null,audioChunks=[],startTime=0,timerInterval=null;
 let displayStream=null,micStream=null,audioContext=null;
 let lastDeepgram=null,lastIBIS=null,lastAudioBlob=null;
+let observationDrafts=[];
 let sourceSwap=false;
 
 window.addEventListener("DOMContentLoaded",()=>{
@@ -158,6 +188,8 @@ window.addEventListener("DOMContentLoaded",()=>{
  document.getElementById("apiKey").value=k;
  const studentSelect=document.getElementById("studentName");
  try {
+   const roster=JSON.parse(localStorage.getItem("ibisRecorderIBISRoster")||"null");
+   if(roster&&Array.isArray(roster.students)&&roster.students.length)renderRosterOptions(roster.students,roster.aliases||{});
    const customNames=JSON.parse(localStorage.getItem("ibisRecorderCustomStudentNames")||"[]");
    customNames.forEach(name=>addStudentOption(name));
    const savedStudent=localStorage.getItem("ibisRecorderStudentSummary")||"";
@@ -167,6 +199,24 @@ window.addEventListener("DOMContentLoaded",()=>{
  updateSourceLabels();
 });
 
+let ibisRosterAliases={};
+function renderRosterOptions(students,aliases={}){
+ const select=document.getElementById('studentName');const previous=select.value;
+ const custom=(()=>{try{return JSON.parse(localStorage.getItem('ibisRecorderCustomStudentNames')||'[]')}catch(e){return []}})();
+ const names=[...new Set((students||[]).filter(s=>s&&s.name&&String(s.status||'Active').toLowerCase()==='active').map(s=>String(s.name).trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ const options=['<option value="">Select active IBIS student…</option>',...names.map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`),...custom.filter(n=>!names.some(a=>a.toLocaleLowerCase()===String(n).toLocaleLowerCase())).map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)} · custom</option>`)];
+ select.innerHTML=options.join('');ibisRosterAliases=aliases||{};
+ const preferred=names.find(n=>n.toLocaleLowerCase()===previous.toLocaleLowerCase())||Array.from(select.options).find(o=>o.value===previous)?.value;
+ if(preferred)select.value=preferred;
+ try{localStorage.setItem('ibisRecorderIBISRoster',JSON.stringify({students:names.map(name=>({name,status:'Active'})),aliases:ibisRosterAliases,importedAt:new Date().toISOString()}));}catch(e){}
+ const help=document.getElementById('rosterHelp');if(help)help.textContent=`${names.length} active IBIS student names loaded. Select the canonical name; legacy aliases are retained for matching imported evidence.`;
+}
+function escapeHTML(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+async function importIBISRoster(event){const file=event.target.files?.[0];if(!file)return;try{const payload=JSON.parse(await file.text());const students=payload.activeStudents||payload.students||payload.studentDatabase||payload.sourceData?.students||payload.localState?.studentDB||[];const aliasSource=payload.aliases||payload.studentAliases||payload.localState?.studentAliases||{};if(!Array.isArray(students)||!students.some(s=>s&&s.name)){throw new Error('No student names were found. Export the “Recorder Roster JSON” from IBIS Teacher Core.');}
+ const active=students.filter(s=>String(s.status||'Active').toLowerCase()==='active');const aliases={};if(Array.isArray(aliasSource)){aliasSource.forEach(a=>{if(a&&a.name&&a.canonicalName)aliases[a.name]=a.canonicalName;});}else{Object.entries(aliasSource||{}).forEach(([k,v])=>{if(typeof v==='string')aliases[k]=v;else if(v&&v.name)aliases[k]=v.name;});}
+ renderRosterOptions(active,aliases);localStorage.setItem('ibisRecorderRosterSource',file.name);status(`Loaded ${active.length} active student names from ${file.name}. Use canonical IBIS names for new recordings.`, 'success');
+ }catch(err){status('Could not import the IBIS roster: '+(err.message||err),'error');alert('Could not import IBIS student roster. '+(err.message||err));}finally{event.target.value='';}}
+function canonicalRecorderName(name){const n=String(name||'').trim();const normalized=n.toLowerCase().replace(/[^a-z0-9]/g,'');for(const [alias,canonical] of Object.entries(ibisRosterAliases||{})){if(alias.toLowerCase().replace(/[^a-z0-9]/g,'')===normalized)return canonical;}return n;}
 function addStudentOption(name){
  const select=document.getElementById("studentName");
  const existing=Array.from(select.options).find(o=>o.value.toLocaleLowerCase()===name.toLocaleLowerCase());
@@ -498,11 +548,12 @@ function buildIBISEvidence(result,meta){
  const pronunciationCandidatesFound=pronunciationCandidates(normalizedUtterances,meta.context.keyterms||[]);
 
  const chCount=Number(result?.metadata?.channels)||alternatives.length||null;
+ const speechMetrics=calculateSpeechMetrics(student,studentWords,Number(result?.metadata?.duration)||meta.request.recorded_duration_seconds||0);
 
  return {
   ibis:{
    framework_version:"1.0",
-   pipeline_version:"recorder-3.1.7-source-separated-pronunciation-candidates",
+   pipeline_version:"recorder-3.2.4-linguistic-patterns-test",
    evidence_only:true,
    speaker_identity_mode:"source_channel_authoritative",
    created_at:new Date().toISOString()
@@ -528,7 +579,8 @@ function buildIBISEvidence(result,meta){
    teacher_words:teacherWords.length,
    student_turns:student.length,
    teacher_turns:teacher.length,
-   student_talk_share:share(student.reduce((a,u)=>a+u.duration,0),teacher.reduce((a,u)=>a+u.duration,0))
+   student_talk_share:share(student.reduce((a,u)=>a+u.duration,0),teacher.reduce((a,u)=>a+u.duration,0)),
+   speech_language_indicators:speechMetrics
   },
   pronunciation_review:{
    status:pronunciationCandidatesFound.length?"CANDIDATES_FOR_AUDIO_REVIEW":"NO_CANDIDATES_DETECTED",
@@ -536,6 +588,8 @@ function buildIBISEvidence(result,meta){
    candidates:pronunciationCandidatesFound,
    summary:pronunciationReviewSummary(pronunciationCandidatesFound)
   },
+  decision_layer:collectDecisionLayer(),
+  observation_suggestions:makeObservationSuggestions(normalizedUtterances,speechMetrics),
   analysis_status:{
    raw_evidence_preserved:true,
    linguistic_analysis:"not yet run",
@@ -546,10 +600,143 @@ function buildIBISEvidence(result,meta){
  };
 }
 
+function collectDecisionLayer(){
+ const val=id=>String(document.getElementById(id)?.value||'').trim();
+ return {
+  schema_version:'1.0', status:document.getElementById('decisionReviewStatus')?.dataset?.reviewed==='true'?'teacher_reviewed':'draft',
+  reviewed_by_role:'teacher', reviewed_at:document.getElementById('decisionReviewStatus')?.dataset?.reviewed==='true'?(document.getElementById('decisionReviewStatus')?.dataset?.reviewedAt||null):null,
+  priority:val('decisionPriority')||'observe', interpretation_confidence:val('decisionConfidence')||'moderate',
+  finding:val('decisionFinding'), teaching_interpretation:val('decisionInterpretation'), next_teaching_action:val('decisionAction'), follow_up_measure:val('decisionMeasure'),
+  student_facing_goal:val('decisionStudentSummary'), include_in_student_report:!!document.getElementById('decisionIncludeStudent')?.checked,
+  provenance:'Teacher-authored decision layer attached to this recording; automated metrics are evidence inputs, not decisions.'
+ };
+}
+function updateDecisionLayer(){
+ if(!lastIBIS)return;
+ lastIBIS.decision_layer=collectDecisionLayer();
+ const out=document.getElementById('ibisJson');if(out)out.textContent=JSON.stringify(lastIBIS,null,2);
+}
+function markDecisionReviewed(){
+ const el=document.getElementById('decisionReviewStatus');if(!el)return;
+ el.dataset.reviewed='true';el.dataset.reviewedAt=new Date().toISOString();el.textContent='Teacher-reviewed · '+new Date().toLocaleString();
+ updateDecisionLayer();
+ if(lastIBIS){lastIBIS.decision_layer.status='teacher_reviewed';lastIBIS.decision_layer.reviewed_at=el.dataset.reviewedAt;document.getElementById('ibisJson').textContent=JSON.stringify(lastIBIS,null,2);}
+}
+function hydrateDecisionLayer(d){
+ if(!d)return;const map={decisionPriority:d.priority,decisionConfidence:d.interpretation_confidence,decisionFinding:d.finding,decisionInterpretation:d.teaching_interpretation,decisionAction:d.next_teaching_action,decisionMeasure:d.follow_up_measure,decisionStudentSummary:d.student_facing_goal};
+ Object.entries(map).forEach(([id,v])=>{const e=document.getElementById(id);if(e&&v!=null)e.value=v});const c=document.getElementById('decisionIncludeStudent');if(c)c.checked=d.include_in_student_report!==false;
+ const st=document.getElementById('decisionReviewStatus');if(st){st.dataset.reviewed=d.status==='teacher_reviewed'?'true':'false';st.dataset.reviewedAt=d.reviewed_at||'';st.textContent=d.status==='teacher_reviewed'?'Teacher-reviewed':'Decision not yet reviewed'}
+}
+
+
+function makeObservationSuggestions(utterances, metrics){
+ const us=(utterances||[]).filter(u=>u.speaker==='student'&&String(u.text||'').trim());
+ const out=[]; const wordsOf=s=>(String(s||'').toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g)||[]);
+ const add=(id,domain,title,evidence,meaning,check,confidence='low')=>{if(!evidence)return;out.push({id,domain,title,evidence,possible_meaning:meaning,teacher_check:check,confidence,status:'pending',teacher_note:'',priority:'observe',source:'rule_based_transcript_heuristic',reviewed_at:null});};
+ const all=us.flatMap(u=>wordsOf(u.text)); const count=all.length; if(!count)return out;
+ const fillers=new Set(['um','uh','erm','er','uhh','umm','like','you know']);
+ const fillerWords=all.filter(w=>fillers.has(w));
+ if(fillerWords.length>=3){const ex=us.filter(u=>wordsOf(u.text).some(w=>fillers.has(w))).slice(0,3);add('fillers','Fluency','Frequent fillers in the transcript',ex.map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`The transcript contains ${fillerWords.length} possible filler tokens across ${count} words. Some items (especially “like” and “you know”) may be meaningful discourse markers rather than hesitation.`,`Listen to the excerpts. Are these planning pauses, habitual fillers, or natural discourse markers?`, 'moderate');}
+ const repeated=[];for(const u of us){const w=wordsOf(u.text);for(let i=1;i<w.length;i++)if(w[i]===w[i-1]&&w[i].length>1){repeated.push(u);break;}}
+ if(repeated.length>=2)add('repetitions','Fluency','Repeated adjacent words or restarts',repeated.slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`Possible repeated-word events appear in ${repeated.length} student utterances. These may reflect hesitation, emphasis, recognition artefacts, or normal spontaneous speech.`,`Check whether these are genuine self-repairs and whether they interrupt meaning.`, 'moderate');
+ const long=us.filter(u=>wordsOf(u.text).length>=18);const short=us.filter(u=>wordsOf(u.text).length>0&&wordsOf(u.text).length<=4);
+ if(us.length>=5&&long.length>=2)add('sustained_turns','Interactional Competence','Evidence of sustained student turns',long.slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`${long.length} student turns contain at least 18 transcript words. This suggests opportunities to examine sustained production, but turn length alone does not show coherence or independence.`,`Were these responses independently developed, or heavily prompted by the teacher?`, 'moderate');
+ if(us.length>=8&&short.length/us.length>=.45)add('short_turns','Interactional Competence','Many brief student turns',short.slice(0,4).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`${short.length} of ${us.length} student utterances contain four words or fewer. This may reflect question style, task demands, or concise but appropriate answers—not necessarily a learner weakness.`,`Did the lesson provide chances for extended answers, explanations, and follow-up questions?`, 'low');
+ const connectors=new Set(['because','although','though','however','therefore','while','whereas','which','who','that','unless','if','when','since','so']);const connectorWords=all.filter(w=>connectors.has(w));
+ if(count>=100)add('clause_linking','Linguistic Complexity','Check how ideas are linked',us.filter(u=>wordsOf(u.text).some(w=>connectors.has(w))).slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n')||us.slice(0,2).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),connectorWords.length?`The transcript contains ${connectorWords.length} possible clause-linking or discourse markers. Their presence does not establish that relationships between ideas are accurate or well organised.`:'Few common clause-linking markers were detected by this simple word-list scan; other ways of linking ideas may not be captured.',`Review the excerpts for cause, contrast, qualification, reference, and coherent development—not just connector counts.`, 'low');
+ const questions=us.filter(u=>String(u.text||'').trim().endsWith('?')||/^\s*(who|what|where|when|why|how|can|could|would|do|does|did|is|are|was|were|have|has)/i.test(u.text));
+ if(us.length>=8)add('learner_questions','Interactional Competence','Check learner-initiated questions',questions.slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n')||'No obvious question-form student utterances were detected by the transcript scan.',`The transcript scan identified ${questions.length} possible student questions. This cannot distinguish genuine learner initiation from reading, role-play, or a transcription issue.`,`Were any questions initiated spontaneously by the learner? Did the learner ask for clarification or extend the topic?`, 'low');
+ const lowConf=us.filter(u=>(u.words||[]).some(w=>Number(w.confidence)<.55));
+ if(lowConf.length)add('transcription_uncertainty','Pronunciation & Intelligibility','Audio review may be useful for unclear transcript segments',lowConf.slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`${lowConf.length} student utterances include at least one low-recognition-confidence word. Recognition uncertainty can result from audio quality, accent, overlap, vocabulary, or ASR limitations; it is not a pronunciation score.`,`Replay these segments. Is the issue pronunciation, recording quality, unfamiliar vocabulary, or transcription?`, 'low');
+ const lex=new Set(all).size; if(count>=50)add('lexical_variety','Lexical Competence','Review vocabulary range in context',us.slice(0,3).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`The simple transcript has ${lex} unique tokens across ${count} words (type-token ratio ${(lex/count).toFixed(2)}). This ratio is highly sensitive to sample length and topic; it cannot independently establish vocabulary range.`,`Are there examples of precise word choice, circumlocution, repeated general words, or successful use of recently taught vocabulary?`, 'low');
+ // Candidate self-repair signals: these markers may be discourse management rather than correction.
+ const repairRe=/(?:\bi mean\b|\bsorry\b|\bno,?\s+i mean\b|\bi said\b|\bor rather\b|\blet me rephrase\b)/i;
+ const repairUs=us.filter(u=>repairRe.test(String(u.text||'')));
+ if(repairUs.length)add('self_repair_candidates','Fluency','Possible self-repair or reformulation markers',repairUs.slice(0,4).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`The transcript contains ${repairUs.length} utterance(s) with a possible reformulation marker. This does not prove the learner corrected a language error; the phrase may clarify or refine meaning.`,`Replay each excerpt. Did the learner notice and correct a linguistic problem, change an idea, or simply add clarification?`, 'low');
+ // Pattern flags are intentionally narrow and always phrased as candidates, never error counts.
+ const grammarRules=[
+  {id:'grammar_third_person',re:/\b(?:he|she|it)\s+don't\b/ig,label:'Possible third-person agreement pattern',meaning:'A transcript phrase may show “don’t” following a third-person singular subject. This can be a genuine agreement issue or a transcription/context artefact.',check:'Replay the phrase and check whether the learner intended a present-simple statement; look for the same pattern elsewhere.'},
+  {id:'grammar_did_base',re:/\bdid(?:n't| not)\s+(?:went|saw|ate|went|had|made|took|came|bought|got|spoke|wrote|did)\b/ig,label:'Possible past-question/negative form pattern',meaning:'A phrase may combine “did” with a past-tense verb where a base form is normally expected. ASR can mishear contractions or word boundaries.',check:'Check the audio and surrounding sentence. If confirmed, see whether this occurs repeatedly in past-tense questions or negatives.'},
+  {id:'grammar_am_agree',re:/\b(?:i am agree|i am understand|i am know|i am believe)\b/ig,label:'Possible verb-pattern or word-class issue',meaning:'A phrase may use “be” before a verb that usually does not take this construction in the intended meaning. It could also be a transcription error.',check:'Listen to the exact phrase and inspect the intended meaning before recording a grammar observation.'},
+  {id:'grammar_comparative',re:/\bmore\s+(?:better|easier|cheaper|bigger|smaller|worse|faster|slower)\b/ig,label:'Possible comparative-form pattern',meaning:'A phrase may contain “more” plus an inflected comparative. Some contexts or transcript errors can make this pattern misleading.',check:'Review the audio and full sentence. If confirmed, check whether this is isolated or recurring.'}
+ ];
+ for(const rule of grammarRules){const matches=[];for(const u of us){const text=String(u.text||'');rule.re.lastIndex=0;if(rule.re.test(text)){matches.push(u);if(matches.length>=3)break;}}if(matches.length)add(rule.id,'Grammatical Accuracy',rule.label,matches.map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),rule.meaning,rule.check,'low');}
+ // Repeated broad vocabulary candidates; not a vocabulary-quality score.
+ const broad=new Set(['thing','things','stuff','good','bad','nice','get','got','do','did','make','made']);
+ const broadUs=us.filter(u=>wordsOf(u.text).filter(w=>broad.has(w)).length>=2);
+ const broadCount=all.filter(w=>broad.has(w)).length;
+ if(broadUs.length>=2)add('general_wording_review','Lexical Competence','Review repeated general-purpose vocabulary',broadUs.slice(0,4).map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`The transcript contains ${broadCount} tokens from a small list of broad everyday words, including “thing”, “good”, “get” and “do”. These words are often perfectly natural; the count alone does not show limited vocabulary.`,`Do any excerpts show that a more precise noun, verb or collocation would improve clarity? Note successful precise alternatives too.`, 'low');
+ // Recurring lexical item prompts only when a content word repeats across several utterances.
+ const stop=new Set(['about','after','again','also','because','before','being','between','could','every','first','from','have','into','just','know','like','more','most','much','only','other','people','really','should','some','than','that','their','them','then','there','these','they','thing','things','this','those','through','very','want','well','were','what','when','where','which','while','with','would','your','have','does','did','will','shall','that','and','but','for','not','you','the','a','an','is','are','was','to','of','in','on','it','i','we','he','she','they','my','me','our','as','at','be','or','if','so','up','out','can','has','had','do']);
+ const occurrence=new Map();for(const u of us){const unique=new Set(wordsOf(u.text).filter(w=>w.length>=5&&!stop.has(w)));for(const w of unique)occurrence.set(w,(occurrence.get(w)||0)+1)}
+ const repeatedLex=[...occurrence.entries()].filter(([w,n])=>n>=4).sort((a,b)=>b[1]-a[1]).slice(0,5);
+ if(repeatedLex.length){const chosen=repeatedLex.map(x=>x[0]);const ex=us.filter(u=>wordsOf(u.text).some(w=>chosen.includes(w))).slice(0,4);add('lexical_recurrence_review','Lexical Competence','Review recurring content words in context',ex.map(u=>`[${Number(u.start||0).toFixed(1)}s] ${u.text}`).join('\n'),`The following words recur across multiple student turns: ${chosen.join(', ')}. Repetition can be appropriate for the topic; this is a prompt to inspect whether the learner also uses precise alternatives and collocations.`,`Are these key topic words being used appropriately, or are there useful opportunities to broaden or refine word choice?`, 'low');}
+
+ return out.slice(0,11);
+}
+function renderObservationSuggestions(list){
+ const host=document.getElementById('observationSuggestions'),summary=document.getElementById('observationAssistantSummary');if(!host||!summary)return;
+ const a=Array.isArray(list)?list:[];summary.textContent=a.length?`${a.length} candidate observation(s) generated. ${a.filter(x=>x.status==='pending').length} still need your review. These prompts are deliberately cautious and should be checked against the recording.`:'No suggestions met the current conservative rules. This does not mean the learner had no useful evidence.';
+ if(!a.length){host.innerHTML='<div class="help">No candidate suggestions for this recording. You can still add your own observations in the Teaching Decision Layer.</div>';return;}
+ host.innerHTML=a.map((x,i)=>`<div class="pron-item" style="margin-top:10px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong>${escapeHTML(x.title)}</strong><span class="pill">${escapeHTML(x.domain)}</span><span class="pill">${escapeHTML(x.status||'pending')}</span></div><div class="help" style="margin-top:8px"><strong>Evidence excerpt(s)</strong><pre style="white-space:pre-wrap;font:inherit;margin:4px 0">${escapeHTML(x.evidence)}</pre></div><div class="help"><strong>Possible meaning:</strong> ${escapeHTML(x.possible_meaning)}</div><div class="help"><strong>Teacher check:</strong> ${escapeHTML(x.teacher_check)}</div><div class="grid two" style="margin-top:8px"><div><label for="obsPriority${i}">Teaching priority</label><select id="obsPriority${i}" onchange="updateObservationDraft(${i},'priority',this.value)"><option value="observe" ${x.priority==='observe'?'selected':''}>Observe / gather evidence</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div><div><label for="obsNote${i}">Teacher note / correction</label><textarea id="obsNote${i}" rows="2" placeholder="Confirm, correct, or add context..." oninput="updateObservationDraft(${i},'teacher_note',this.value)">${escapeHTML(x.teacher_note||'')}</textarea></div></div><div class="pron-actions"><button class="secondary" onclick="reviewObservation(${i},'confirmed')">✓ Confirm</button><button class="secondary" onclick="reviewObservation(${i},'rejected')">✕ Reject</button><button class="secondary" onclick="reviewObservation(${i},'expanded')">＋ Confirm & expand</button><button class="secondary" onclick="reviewObservation(${i},'deferred')">? Defer</button></div></div>`).join('');
+}
+function updateObservationDraft(i,key,value){if(!observationDrafts[i])return;observationDrafts[i][key]=value;if(lastIBIS){lastIBIS.observation_suggestions=observationDrafts;document.getElementById('ibisJson').textContent=JSON.stringify(lastIBIS,null,2)}}
+function reviewObservation(i,status){const x=observationDrafts[i];if(!x)return;x.status=status;x.reviewed_at=new Date().toISOString();const note=document.getElementById('obsNote'+i);const priority=document.getElementById('obsPriority'+i);if(note)x.teacher_note=note.value;if(priority)x.priority=priority.value;if(lastIBIS){lastIBIS.observation_suggestions=observationDrafts;document.getElementById('ibisJson').textContent=JSON.stringify(lastIBIS,null,2)}renderObservationSuggestions(observationDrafts)}
+
+function calculateSpeechMetrics(studentUtterances,studentWords,lessonDuration){
+ const words=(studentWords||[]).map(w=>({text:String(w.normalized||w.surface||w.word||'').toLowerCase().replace(/[^a-z0-9']/g,''),confidence:Number(w.confidence)})).filter(w=>w.text);
+ const utterances=(studentUtterances||[]).filter(u=>Number.isFinite(u.start)&&Number.isFinite(u.end)&&u.end>u.start).slice().sort((a,b)=>a.start-b.start);
+ const utteranceSeconds=utterances.reduce((n,u)=>n+(u.end-u.start),0);
+ const pauses=[];for(let i=1;i<utterances.length;i++){const gap=utterances[i].start-utterances[i-1].end;if(gap>=0.25)pauses.push(gap)}
+ const fillers=new Set(['uh','um','erm','er','mm','mhm','uh-huh','uh-uh']);
+ const fillerCount=words.filter(w=>fillers.has(w.text)).length;
+ const repeated=words.slice(1).filter((w,i)=>w.text===words[i].text).length;
+ const unique=new Set(words.map(w=>w.text));
+ const confidences=words.map(w=>w.confidence).filter(n=>Number.isFinite(n)&&n>0);
+ const low=confidences.filter(n=>n<0.55).length;
+ return {
+  student_word_count:words.length,
+  estimated_utterance_rate_wpm:utteranceSeconds>0?Number((words.length/utteranceSeconds*60).toFixed(1)):null,
+  lesson_average_student_wpm:lessonDuration>0?Number((words.length/lessonDuration*60).toFixed(1)):null,
+  student_utterance_seconds:Number(utteranceSeconds.toFixed(2)),
+  pause_gaps_over_250ms:pauses.length,
+  pause_gap_seconds:Number(pauses.reduce((a,b)=>a+b,0).toFixed(2)),
+  mean_pause_gap_seconds:pauses.length?Number((pauses.reduce((a,b)=>a+b,0)/pauses.length).toFixed(2)):null,
+  filler_count:fillerCount,
+  fillers_per_100_words:words.length?Number((fillerCount/words.length*100).toFixed(2)):null,
+  immediate_repeated_token_count:repeated,
+  immediate_repeats_per_100_words:words.length?Number((repeated/words.length*100).toFixed(2)):null,
+  type_token_ratio:words.length?Number((unique.size/words.length).toFixed(3)):null,
+  unique_token_count:unique.size,
+  mean_word_recognition_confidence:confidences.length?Number((confidences.reduce((a,b)=>a+b,0)/confidences.length).toFixed(3)):null,
+  low_recognition_confidence_words:low,
+  interpretation:'Descriptive indicators only. Utterance rate includes time inside provider utterance boundaries; pause gaps are gaps between detected utterances, not all pauses. Repetition/filler heuristics may misclassify speech. Recognition confidence is not pronunciation accuracy or learner confidence.'
+ };
+}
 function share(a,b){return a+b?Number((a/(a+b)).toFixed(4)):0}
 function countFillers(words){const fillers=new Set(["uh","um","mhmm","mm-mm","uh-uh","uh-huh","nuh-uh"]);return (words||[]).filter(w=>fillers.has(String(w.normalized||w.word||"").toLowerCase())).length}
 function countRepeatedTokens(words){let n=0,last="";for(const w of (words||[])){const cur=String(w.normalized||w.word||"").toLowerCase();if(cur&&cur===last)n++;last=cur}return n}
 function sumPauses(utterances){let total=0,lastEnd=null;for(const u of (utterances||[]).sort((a,b)=>a.start-b.start)){if(lastEnd!=null&&u.start>lastEnd)total+=u.start-lastEnd;lastEnd=Math.max(lastEnd??0,u.end)}return Number(total.toFixed(2))}
+
+
+function renderSpeechMetrics(m){
+ const el=document.getElementById('speechMetrics'),note=document.getElementById('speechInterpretation');if(!el)return;
+ const fmt=(v,suffix='')=>v==null||!Number.isFinite(Number(v))?'—':`${v}${suffix}`;
+ const cards=[
+  ['Student speaking rate',fmt(m.estimated_utterance_rate_wpm,' wpm')],
+  ['Student words',fmt(m.student_word_count)],
+  ['Pause gaps ≥250 ms',fmt(m.pause_gaps_over_250ms)],
+  ['Time between utterances',fmt(m.pause_gap_seconds,' s')],
+  ['Mean pause gap',fmt(m.mean_pause_gap_seconds,' s')],
+  ['Fillers per 100 words',fmt(m.fillers_per_100_words)],
+  ['Immediate repeats / 100 words',fmt(m.immediate_repeats_per_100_words)],
+  ['Lexical variety (TTR)',fmt(m.type_token_ratio)],
+  ['Mean recognition confidence',fmt(m.mean_word_recognition_confidence)],
+  ['Low-confidence words',fmt(m.low_recognition_confidence_words)]
+ ];
+ el.innerHTML=cards.map(([k,v])=>`<div class="metric"><div class="label">${escapeHTML(k)}</div><div class="value">${escapeHTML(v)}</div></div>`).join('');
+ if(note)note.textContent='Interpret carefully: speaking rate is based on detected student utterance durations; pause totals include only gaps between utterances. Filler and repetition counts are heuristic. Transcript confidence measures recognition certainty, not pronunciation quality, grammar accuracy or emotional confidence. These values are not converted to CEFR levels.';
+}
 
 function renderResults(result,ibis,ms,sizeMB){
  document.getElementById("results").style.display="block";
@@ -564,11 +751,12 @@ function renderResults(result,ibis,ms,sizeMB){
   ["Student talk share",(m.student_talk_share*100).toFixed(1)+"%"]
  ].map(x=>`<div class="metric"><div class="label">${escapeHTML(x[0])}</div><div class="value">${escapeHTML(x[1])}</div></div>`).join("");
 
+ renderSpeechMetrics(ibis.objective_metrics?.speech_language_indicators||{});
  renderPronunciationQueue(ibis.pronunciation_review?.candidates||[]);
  renderPronunciationSummary(ibis.pronunciation_review?.summary||pronunciationReviewSummary(ibis.pronunciation_review?.candidates||[]));
  document.getElementById("transcript").textContent=ibis.transcript.speaker_transcript||"(No source-separated utterances returned.)";
  document.getElementById("deepgramJson").textContent=JSON.stringify(result,null,2);
- document.getElementById("ibisJson").textContent=JSON.stringify(ibis,null,2);
+ lastIBIS=ibis;observationDrafts=Array.isArray(ibis.observation_suggestions)?ibis.observation_suggestions:makeObservationSuggestions(ibis.transcript?.utterances||[],ibis.objective_metrics?.speech_language_indicators||{});lastIBIS.observation_suggestions=observationDrafts;renderObservationSuggestions(observationDrafts);hydrateDecisionLayer(ibis.decision_layer);document.getElementById("ibisJson").textContent=JSON.stringify(lastIBIS,null,2);
  document.getElementById("results").scrollIntoView({behavior:"smooth"});
 }
 function escapeHTML(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
