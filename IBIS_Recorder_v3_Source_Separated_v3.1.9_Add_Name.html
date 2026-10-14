@@ -582,15 +582,21 @@ function lessonFileBase(){
  const date=new Date().toISOString().slice(0,10);
  return `${safe} - ${date}`;
 }
-function sendEvidenceToIBIS(){
- if(!lastIBIS){alert('Complete a recording and receive a Deepgram response before sending evidence to IBIS.');return;}
- const rawName=String(lastIBIS.lesson?.student_name||'').replace(/\s*-\s*Preply lesson\s*$/i,'').trim();
- const payload={schema:'ibis-recorder-handoff-v1',createdAt:new Date().toISOString(),date:new Date().toISOString().slice(0,10),studentName:rawName,filename:`Recorder Evidence - ${rawName||'Unassigned'} - ${new Date().toISOString().slice(0,10)}.json`,evidence:lastIBIS};
- try{localStorage.setItem('ibisRecorderEvidenceHandoff',JSON.stringify(payload));alert('Evidence queued for IBIS. Switch to IBIS Teacher Core on the same website origin, open Reports, and click “Import Recorder Evidence”.');}catch(e){alert('Could not queue evidence in browser storage: '+(e?.message||e)+'. Use Download IBIS Evidence JSON and import the file manually instead.');}
-}
 function downloadIBIS(){
  if(!lastIBIS){alert("No evidence package available yet.");return}
  saveBlob(JSON.stringify(lastIBIS,null,2),`${lessonFileBase()} - IBIS Evidence.json`,"application/json");
+}
+function sendEvidenceToIBIS(){
+ if(!lastIBIS){alert("No evidence package available yet. Process a recording first.");return}
+ const student=String(lastIBIS.lesson?.student_name||"").replace(/\s*-\s*Preply lesson\s*$/i,"").trim();
+ if(!student){alert("No student name is attached to this evidence package. Select a student and process the recording again.");return}
+ const date=new Date().toISOString().slice(0,10);
+ const filename=`${lessonFileBase()} - IBIS Evidence.json`;
+ const handoff={schemaVersion:1,source:"IBIS Recorder",evidence:lastIBIS,date,filename,createdAt:new Date().toISOString()};
+ try{
+  localStorage.setItem("ibisRecorderEvidenceHandoff",JSON.stringify(handoff));
+  alert("Evidence prepared for IBIS. Open Teacher Core on the same browser and website origin, go to Reports, then click Import Recorder Evidence. Review the student and lesson association before relying on the report.");
+ }catch(err){alert("Could not prepare the IBIS handoff. Check browser storage permissions and ensure both tools use the same website origin. "+(err?.message||err));}
 }
 function downloadDeepgram(){
  if(!lastDeepgram){alert("No Deepgram response available yet.");return}
