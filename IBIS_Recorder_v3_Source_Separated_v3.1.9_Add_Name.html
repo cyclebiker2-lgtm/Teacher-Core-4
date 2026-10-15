@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IBIS Recorder v3 — Source-Separated Deepgram Pipeline</title>
+<title>IBIS Recorder v3.2.6 — Reference Reading Analysis TEST</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(to bottom,#000,#4B2E0B);color:#FFD700;min-height:100vh;padding:20px}
@@ -47,8 +47,8 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:440px;overflow:auto;ba
 <body>
 <div class="container">
 <header>
-<h1>IBIS Recorder v3</h1>
-<p>Source-Separated Recording → Deepgram Multichannel → IBIS Evidence</p>
+<h1>IBIS Recorder v3.2.6</h1>
+<p>Source-Separated Recording → Reference Reading Comparison → IBIS Evidence</p>
 </header>
 <div class="content">
 
@@ -61,6 +61,15 @@ pre{white-space:pre-wrap;word-break:break-word;max-height:440px;overflow:auto;ba
 <div><label for="topic">Topic</label><input id="topic" placeholder="Optional lesson topic"></div>
 <div style="grid-column:1/-1"><label for="keyterms">Lesson key terms</label><input id="keyterms" placeholder="Optional terms/phrases to improve recognition, comma separated"><div class="help">Nova-3 keyterm prompting is used only for these terms. This improves recognition of lesson-specific vocabulary without changing the student speech evidence.</div></div>
 </div>
+</div>
+
+<div class="section" id="referenceReadingSetup">
+ <div class="section-title">Reference Reading Analysis (optional)</div>
+ <div class="notice">Paste or upload the exact passage the student will read. After Deepgram transcribes the recording, IBIS will align the student's transcript with this reference and flag word-level differences. Differences are not automatically pronunciation errors: they may be reading slips, transcript recognition errors, or natural variations. Teacher review is required.</div>
+ <div style="margin-top:12px"><label for="referenceTitle">Reference title / source</label><input id="referenceTitle" placeholder="e.g. Chapter 2, paragraph 4; IBIS text generator passage"></div>
+ <div style="margin-top:10px"><label for="referenceText">Exact reference text</label><textarea id="referenceText" rows="6" style="width:100%;padding:12px;background:rgba(0,0,0,.6);border:1px solid #FFD700;border-radius:6px;color:#FFD700" placeholder="Paste the exact passage here..."></textarea>
+ <div class="buttons" style="margin-top:8px"><button type="button" class="secondary" onclick="document.getElementById('referenceFile').click()">Upload reference text</button><input id="referenceFile" type="file" accept=".txt,.md,.text,text/plain,text/markdown" style="display:none" onchange="loadReferenceFile(event)"><button type="button" class="secondary" onclick="clearReferenceText()">Clear reference</button></div>
+ <div id="referenceStatus" class="help">No reference text loaded. Recording and normal transcript analysis will work as before.</div></div>
 </div>
 
 <div class="section">
@@ -119,6 +128,14 @@ Select the Preply tab and <strong>check Share audio</strong>. Microphone permiss
  <div class="help">These indicators are calculated from source-separated Deepgram words and utterance timings. They are descriptive evidence, not a CEFR score or a pronunciation-accuracy score. Recognition confidence is confidence in transcription, not confidence in the learner.</div>
  <div id="speechMetrics" class="grid five" style="margin-top:12px"><div class="metric"><div class="label">Status</div><div class="value">Waiting</div></div></div>
  <div id="speechInterpretation" class="notice" style="margin-top:12px">Process a recording to calculate the initial evidence-based indicators.</div>
+</div>
+
+<div class="section" id="referenceReadingResults" style="display:none;margin-top:18px">
+ <div class="section-title">Reference Reading Comparison</div>
+ <div class="help">Word alignment helps locate possible differences. It cannot determine the exact sound produced. Low recognition confidence can help prioritise listening but does not prove mispronunciation.</div>
+ <div id="referenceReadingMetrics" class="metrics" style="margin-top:10px"></div>
+ <div id="referenceReadingSummary" class="notice" style="margin-top:10px"></div>
+ <div id="referenceReadingItems" style="margin-top:10px"></div>
 </div>
 
 <div class="section" id="observationAssistant" style="margin-top:18px">
@@ -182,6 +199,35 @@ let displayStream=null,micStream=null,audioContext=null;
 let lastDeepgram=null,lastIBIS=null,lastAudioBlob=null;
 let observationDrafts=[];
 let sourceSwap=false;
+let referenceReadingAnalysis=null;
+
+function loadReferenceFile(event){const file=event.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{document.getElementById('referenceText').value=String(reader.result||'');document.getElementById('referenceTitle').value=document.getElementById('referenceTitle').value||file.name;updateReferenceStatus()};reader.onerror=()=>{document.getElementById('referenceStatus').textContent='Could not read this file. Please paste the text instead.'};reader.readAsText(file);}
+function clearReferenceText(){document.getElementById('referenceText').value='';document.getElementById('referenceTitle').value='';referenceReadingAnalysis=null;document.getElementById('referenceReadingResults').style.display='none';updateReferenceStatus();if(lastIBIS){delete lastIBIS.reference_reading_analysis;refreshIBISJson();}}
+function updateReferenceStatus(){const text=(document.getElementById('referenceText')?.value||'').trim();const count=tokenizeReference(text).length;const el=document.getElementById('referenceStatus');if(el)el.textContent=text?`${count} reference words loaded. This passage will be compared with the student-channel transcript after processing.`:'No reference text loaded. Recording and normal transcript analysis will work as before.';}
+function tokenizeReference(text){return String(text||'').match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)||[];}
+function normToken(s){return String(s||'').toLocaleLowerCase().replace(/[’]/g,"'").replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,'');}
+function alignReferenceWords(referenceTokens,recognizedWords){
+ const a=referenceTokens.map(normToken),b=recognizedWords.map(w=>normToken(w.normalized||w.surface||w.word));const n=a.length,m=b.length;
+ if(n*m>2500000)return {error:'This passage is too long for the in-browser alignment limit. Split it into shorter passages (roughly 1,500 words or fewer).'};
+ const dp=Array.from({length:n+1},()=>new Uint32Array(m+1));const dir=Array.from({length:n+1},()=>new Uint8Array(m+1));
+ for(let i=1;i<=n;i++){dp[i][0]=i;dir[i][0]=2}for(let j=1;j<=m;j++){dp[0][j]=j;dir[0][j]=3}
+ for(let i=1;i<=n;i++)for(let j=1;j<=m;j++){const same=a[i-1]===b[j-1]&&a[i-1]!=='';const vals=[dp[i-1][j-1]+(same?0:1),dp[i-1][j]+1,dp[i][j-1]+1];let best=Math.min(...vals);dp[i][j]=best;dir[i][j]=best===vals[0]? (same?0:1):best===vals[1]?2:3;}
+ const ops=[];let i=n,j=m;while(i>0||j>0){const d=dir[i][j];if(i>0&&j>0&&d<=1){ops.push({type:d===0?'match':'substitution',reference_index:i-1,recognized_index:j-1,reference:a[i-1],recognized:b[j-1],word:recognizedWords[j-1]});i--;j--;}else if(i>0&&(j===0||d===2)){ops.push({type:'omission',reference_index:i-1,recognized_index:null,reference:a[i-1],recognized:null,word:null});i--;}else{ops.push({type:'insertion',reference_index:null,recognized_index:j-1,reference:null,recognized:b[j-1],word:recognizedWords[j-1]});j--;}}
+ ops.reverse();return {operations:ops,edit_distance:dp[n][m],reference_word_count:n,recognized_word_count:m};
+}
+function runReferenceReadingAnalysis(ibis){
+ const text=(document.getElementById('referenceText')?.value||'').trim();if(!text)return null;
+ const refTokens=tokenizeReference(text);const words=(ibis.transcript?.utterances||[]).filter(u=>u.speaker==='student').sort((a,b)=>(a.start||0)-(b.start||0)).flatMap(u=>(u.words||[]).map(w=>({...w,utterance_start:u.start,utterance_end:u.end})));
+ const aligned=alignReferenceWords(refTokens,words);if(aligned.error)return {schema_version:'1.0',status:'alignment_limit',reference_title:(document.getElementById('referenceTitle')?.value||'').trim()||null,error:aligned.error,reference_text:text,review_required:true};
+ const discrepancies=aligned.operations.filter(o=>o.type!=='match').map((o,i)=>({id:`refdiff-${i+1}`,type:o.type,reference_word:o.reference||null,recognized_word:o.recognized||null,reference_index:o.reference_index,recognized_index:o.recognized_index,timestamp_seconds:o.word&&Number.isFinite(Number(o.word.start))?Number(o.word.start):null,word_start:o.word&&Number.isFinite(Number(o.word.start))?Number(o.word.start):null,word_end:o.word&&Number.isFinite(Number(o.word.end))?Number(o.word.end):null,recognition_confidence:o.word&&Number.isFinite(Number(o.word.confidence))?Number(o.word.confidence):null,review_status:'pending',teacher_classification:null,teacher_note:'',source:'reference_transcript_alignment'}));
+ const subs=discrepancies.filter(x=>x.type==='substitution').length,del=discrepancies.filter(x=>x.type==='omission').length,ins=discrepancies.filter(x=>x.type==='insertion').length;const n=refTokens.length;const wordErrorRate=n?(subs+del+ins)/n:null;const wordAccuracy=n?Math.max(0,1-(subs+del)/n):null;
+ return {schema_version:'1.0',status:'awaiting_teacher_review',method:'case-insensitive token alignment using minimum-edit-distance dynamic programming; punctuation is ignored; contractions are tokenised as one token',reference_title:(document.getElementById('referenceTitle')?.value||'').trim()||null,reference_text:text,reference_word_count:n,recognized_student_word_count:words.length,matched_word_count:aligned.operations.filter(o=>o.type==='match').length,substitutions:subs,omissions:del,insertions:ins,edit_distance:aligned.edit_distance,word_error_rate:wordErrorRate===null?null:Number(wordErrorRate.toFixed(4)),word_accuracy_excluding_insertions:wordAccuracy===null?null:Number(wordAccuracy.toFixed(4)),discrepancy_count:discrepancies.length,discrepancies,interpretation:'These are differences between the supplied reference and Deepgram-recognized student transcript, not confirmed reading or pronunciation errors. Word error rate includes substitutions, omissions and insertions and may exceed 100%. Word accuracy here excludes insertions and is not a pronunciation score. Recognition errors, contractions, natural speech variation and alignment ambiguity can affect results.',review_required:true,created_at:new Date().toISOString()};
+}
+function renderReferenceReadingAnalysis(a){const section=document.getElementById('referenceReadingResults');if(!section)return;if(!a){section.style.display='none';return;}section.style.display='block';const metric=(label,value)=>`<div class="metric"><div class="label">${escapeHTML(label)}</div><div class="value">${escapeHTML(value)}</div></div>`;document.getElementById('referenceReadingMetrics').innerHTML=[metric('Reference words',a.reference_word_count??'—'),metric('Matched words',a.matched_word_count??'—'),metric('Substitutions',a.substitutions??'—'),metric('Omissions',a.omissions??'—'),metric('Insertions',a.insertions??'—'),metric('Word error rate',a.word_error_rate==null?'—':(a.word_error_rate*100).toFixed(1)+'%'),metric('Discrepancies to review',a.discrepancy_count??'—')].join('');document.getElementById('referenceReadingSummary').textContent=a.error||a.interpretation||'No comparison summary available.';const host=document.getElementById('referenceReadingItems');if(a.error){host.innerHTML=`<div class="notice">${escapeHTML(a.error)}</div>`;return;}if(!a.discrepancies?.length){host.innerHTML='<div class="notice">No word-level differences were detected by this comparison. This does not establish pronunciation accuracy; continue to review audio as needed.</div>';return;}host.innerHTML=a.discrepancies.map((d,i)=>`<div class="pron-item"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><strong>${escapeHTML(d.type.toUpperCase())}</strong><span class="pill">${d.timestamp_seconds==null?'timestamp unavailable':d.timestamp_seconds.toFixed(2)+' s'}</span><span class="pill">${escapeHTML(d.review_status)}</span></div><div style="margin-top:8px"><strong>Reference:</strong> ${escapeHTML(d.reference_word||'—')} &nbsp; <strong>Transcript:</strong> ${escapeHTML(d.recognized_word||'—')}</div><div class="help">${d.recognition_confidence==null?'Recognition confidence unavailable':`Deepgram recognition confidence: ${d.recognition_confidence.toFixed(2)} (not a pronunciation score)`}</div><div class="grid two" style="margin-top:8px"><div><label for="refClass${i}">Teacher classification</label><select id="refClass${i}" onchange="reviewReferenceDiscrepancy(${i},'teacher_classification',this.value)"><option value="">Choose after listening…</option><option value="pronunciation_issue" ${d.teacher_classification==='pronunciation_issue'?'selected':''}>Likely pronunciation issue</option><option value="reading_slip" ${d.teacher_classification==='reading_slip'?'selected':''}>Reading slip / self-correction</option><option value="transcription_error" ${d.teacher_classification==='transcription_error'?'selected':''}>Deepgram transcription error</option><option value="natural_variation" ${d.teacher_classification==='natural_variation'?'selected':''}>Natural variation / acceptable form</option><option value="uncertain" ${d.teacher_classification==='uncertain'?'selected':''}>Unclear — review later</option></select></div><div><label for="refNote${i}">Teacher note</label><textarea id="refNote${i}" rows="2" placeholder="Optional observation or target..." oninput="reviewReferenceDiscrepancy(${i},'teacher_note',this.value)">${escapeHTML(d.teacher_note||'')}</textarea></div></div><div class="pron-actions"><button class="secondary" onclick="playReferenceAudio(${i})">▶ Play from timestamp</button><button class="secondary" onclick="setReferenceReview(${i},'reviewed')">✓ Mark reviewed</button></div></div>`).join('');}
+function reviewReferenceDiscrepancy(i,key,value){if(!referenceReadingAnalysis?.discrepancies?.[i])return;referenceReadingAnalysis.discrepancies[i][key]=value;refreshReferenceAnalysis();}
+function setReferenceReview(i,status){if(!referenceReadingAnalysis?.discrepancies?.[i])return;const d=referenceReadingAnalysis.discrepancies[i];d.review_status=status;d.reviewed_at=new Date().toISOString();refreshReferenceAnalysis();renderReferenceReadingAnalysis(referenceReadingAnalysis);}
+function playReferenceAudio(i){const d=referenceReadingAnalysis?.discrepancies?.[i];const audio=document.getElementById('pronunciationPlayer');if(!d||!audio||!lastAudioBlob)return;const url=URL.createObjectURL(lastAudioBlob);audio.src=url;audio.style.display='block';audio.onloadedmetadata=()=>{audio.currentTime=Math.max(0,(d.timestamp_seconds||0)-1.2);audio.play().catch(()=>{});};audio.scrollIntoView({behavior:'smooth',block:'center'});}
+function refreshReferenceAnalysis(){if(!lastIBIS)return;lastIBIS.reference_reading_analysis=referenceReadingAnalysis;const pre=document.getElementById('ibisJson');if(pre)pre.textContent=JSON.stringify(lastIBIS,null,2);}
 
 window.addEventListener("DOMContentLoaded",()=>{
  const k=localStorage.getItem("deepgramApiKey")||"";
@@ -196,6 +242,8 @@ window.addEventListener("DOMContentLoaded",()=>{
    if(savedStudent && Array.from(studentSelect.options).some(o=>o.value===savedStudent)) studentSelect.value=savedStudent;
  } catch(e) { console.warn("Could not load saved student names",e); }
  studentSelect.addEventListener("change",()=>localStorage.setItem("ibisRecorderStudentSummary",studentSelect.value));
+ document.getElementById("referenceText")?.addEventListener("input",updateReferenceStatus);
+ updateReferenceStatus();
  updateSourceLabels();
 });
 
@@ -423,7 +471,10 @@ async function processRecording(){
    }
   });
 
+  referenceReadingAnalysis=runReferenceReadingAnalysis(lastIBIS);
+  if(referenceReadingAnalysis)lastIBIS.reference_reading_analysis=referenceReadingAnalysis;
   renderResults(result,lastIBIS,requestMs,sizeMB);
+  renderReferenceReadingAnalysis(referenceReadingAnalysis);
   const channels=result?.metadata?.channels;
   const warning=channels===2 ? "" : ` Deepgram reports ${channels??"an unknown number of"} channel(s); expected 2.`;
   status(`✅ Deepgram returned HTTP ${response.status}. Source-separated evidence preserved.${warning}`,"success");
@@ -553,7 +604,7 @@ function buildIBISEvidence(result,meta){
  return {
   ibis:{
    framework_version:"1.0",
-   pipeline_version:"recorder-3.2.4-linguistic-patterns-test",
+   pipeline_version:"recorder-3.2.6-reference-reading-test",
    evidence_only:true,
    speaker_identity_mode:"source_channel_authoritative",
    created_at:new Date().toISOString()
@@ -772,6 +823,7 @@ function lessonFileBase(){
 }
 function downloadIBIS(){
  if(!lastIBIS){alert("No evidence package available yet.");return}
+ if(referenceReadingAnalysis)lastIBIS.reference_reading_analysis=referenceReadingAnalysis;
  saveBlob(JSON.stringify(lastIBIS,null,2),`${lessonFileBase()} - IBIS Evidence.json`,"application/json");
 }
 function sendEvidenceToIBIS(){
