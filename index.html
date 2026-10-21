@@ -922,18 +922,66 @@ function recorderDecisionReportHTML(reps,student){
  return `<div class="rp-section"><h2>Recorder findings & emerging trends</h2><p>${rr.length} Recorder sample${rr.length===1?'':'s'} linked to this student. Values are descriptive and not normalised across task types.</p>${metricRows||'<p>No supported trend metrics available in these samples.</p>'}<p class="rp-muted">Guardrails: ASR recognition confidence is not pronunciation accuracy; utterance gaps are not a direct measure of all pauses; type-token ratio is length-sensitive. No CEFR score is inferred from these values.</p></div><div class="rp-section"><h2>Latest teaching decision</h2>${dec?`<div class="rp-item"><strong>Status:</strong> ${esc(dec.status||'draft')} · <strong>Priority:</strong> ${esc(dec.priority||'not set')} · <strong>Interpretation confidence:</strong> ${esc(dec.interpretation_confidence||'not stated')}</div>${dec.finding?`<div class="rp-item"><strong>Finding</strong><p>${esc(dec.finding)}</p></div>`:''}${dec.teaching_interpretation?`<div class="rp-item"><strong>Interpretation</strong><p>${esc(dec.teaching_interpretation)}</p></div>`:''}${dec.next_teaching_action?`<div class="rp-item"><strong>Next teaching action</strong><p>${esc(dec.next_teaching_action)}</p></div>`:''}${dec.follow_up_measure?`<div class="rp-item"><strong>Follow-up evidence</strong><p>${esc(dec.follow_up_measure)}</p></div>`:''}<div class="rp-muted">Recorded ${esc(latest?.date||'date not available')}. ${dec.status==='teacher_reviewed'?'Teacher-reviewed decision.':'Draft decision — confirm before treating as an agreed teaching plan.'}</div>`:'<p>No Recorder decision layer has been supplied yet. Add and review a decision in Recorder, then import the updated JSON.</p>'}</div>`;
 }
 
+
+function pronunciationLearningSynthesisHTML(reps,studentMode){
+ const samples=(reps||[]).slice().sort((a,b)=>dateSort(a.date)-dateSort(b.date));
+ const records=[];
+ const normWord=v=>String(v||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9'-]/g,'').trim();
+ const push=(kind,expected,observed,date,note,source)=>{
+  const e=String(expected||'').trim(),o=String(observed||'').trim();
+  const key=[kind,normWord(e),normWord(o)].join('|');
+  let row=records.find(x=>x.key===key);
+  if(!row){row={key,kind,expected:e,observed:o,count:0,dates:[],notes:[],sources:[]};records.push(row);}
+  row.count++;if(date&&!row.dates.includes(String(date)))row.dates.push(String(date));
+  if(note&&!row.notes.includes(String(note)))row.notes.push(String(note));
+  if(source&&!row.sources.includes(source))row.sources.push(source);
+ };
+ samples.forEach(r=>{
+  const a=r.raw?.reference_reading_analysis;
+  (a?.discrepancies||[]).forEach(d=>{
+   if(d.review_status!=='reviewed')return;
+   const cl=d.teacher_classification;
+   if(cl==='pronunciation_issue')push('confirmed',d.reference_word,d.recognized_word,r.date,d.teacher_note,'Reference reading review');
+   else if(cl==='natural_variation')push('variation',d.reference_word,d.recognized_word,r.date,d.teacher_note,'Reference reading review');
+   else if(cl==='reading_slip')push('self-correction',d.reference_word,d.recognized_word,r.date,d.teacher_note,'Reference reading review');
+   else if(cl==='transcription_error')push('transcription',d.reference_word,d.recognized_word,r.date,d.teacher_note,'Reference reading review');
+  });
+  (r.pronunciationCandidates||r.raw?.pronunciationCandidates||[]).forEach(c=>{
+   if(c.teacher_review==='CONFIRMED_PRONUNCIATION')push('confirmed',c.expected,c.observed,r.date,c.reason,'Recorder pronunciation review');
+   else if(c.teacher_review==='LIKELY_TRANSCRIPTION_ERROR')push('transcription',c.expected,c.observed,r.date,c.reason,'Recorder pronunciation review');
+  });
+ });
+ const types=['confirmed','variation','self-correction','transcription'];
+ const totals=Object.fromEntries(types.map(k=>[k,records.filter(x=>x.kind===k).reduce((n,x)=>n+x.count,0)]));
+ const datesFor=k=>new Set(records.filter(x=>x.kind===k).flatMap(x=>x.dates)).size;
+ const confirmed=records.filter(x=>x.kind==='confirmed').sort((a,b)=>b.dates.length-a.dates.length||b.count-a.count);
+ const variations=records.filter(x=>x.kind==='variation').sort((a,b)=>b.dates.length-a.dates.length||b.count-a.count);
+ const corrections=records.filter(x=>x.kind==='self-correction').sort((a,b)=>b.dates.length-a.dates.length||b.count-a.count);
+ const renderRows=(arr,kind)=>arr.slice(0,5).map(x=>{
+  const recurrence=x.dates.length>=3?'recurring across 3+ dates':x.dates.length===2?'seen on 2 dates':'seen on 1 date';
+  const label=kind==='confirmed'?'Confirmed target':kind==='variation'?'Accepted variation':'Self-correction / reading slip';
+  const detail=x.expected&&x.observed&&normWord(x.expected)!==normWord(x.observed)?`${esc(x.expected)} → ${esc(x.observed)}`:esc(x.expected||x.observed||'Reviewed occurrence');
+  const note=x.notes.length?`<div class="rp-muted">Teacher note: ${esc(x.notes.at(-1))}</div>`:'';
+  return `<div class="rp-item"><strong>${label}: ${detail}</strong><div>${x.count} reviewed occurrence${x.count===1?'':'s'} · ${x.dates.length} distinct date${x.dates.length===1?'':'s'} · ${recurrence}</div>${note}</div>`;
+ }).join('');
+ if(studentMode){
+  return `<div class="rp-section"><h2>Pronunciation, variation and self-correction</h2><p>This section uses only teacher-reviewed evidence. It focuses on useful learning information rather than raw transcript differences.</p><div class="grid two"><div class="rp-item"><strong>Pronunciation targets confirmed by your teacher</strong><div>${totals.confirmed} reviewed occurrence${totals.confirmed===1?'':'s'} across ${datesFor('confirmed')} dated lesson${datesFor('confirmed')===1?'':'s'}.</div></div><div class="rp-item"><strong>Self-corrections / reading slips noticed</strong><div>${totals['self-correction']} reviewed occurrence${totals['self-correction']===1?'':'s'} across ${datesFor('self-correction')} dated lesson${datesFor('self-correction')===1?'':'s'}.</div></div><div class="rp-item"><strong>Acceptable variations recognised</strong><div>${totals.variation} reviewed occurrence${totals.variation===1?'':'s'} across ${datesFor('variation')} dated lesson${datesFor('variation')===1?'':'s'}.</div></div></div>${confirmed.length?`<h3>Pronunciation practice we are revisiting</h3>${renderRows(confirmed,'confirmed')}`:''}${corrections.length?`<h3>Self-correction strengths</h3>${renderRows(corrections,'self-correction')}`:''}${variations.length?`<h3>Accepted ways of saying it</h3>${renderRows(variations,'variation')}`:''}${!totals.confirmed&&!totals['self-correction']&&!totals.variation?'<div class="rp-item">There are not yet enough teacher-reviewed pronunciation examples to summarise. Unreviewed transcript differences are not treated as confirmed findings.</div>':''}<div class="rp-muted">This is not a pronunciation score. A target appearing in several lessons may be worth practising again; it does not by itself show the cause or severity of a difficulty.</div></div>`;
+ }
+ return `<div class="rp-section"><h2>Reviewed pronunciation learning evidence</h2><p>Only reviewed classifications are summarised here. Pending and unclear candidates are excluded from the learning pattern counts.</p><div class="grid two"><div class="rp-item"><strong>Confirmed pronunciation targets</strong><div>${totals.confirmed} occurrences · ${datesFor('confirmed')} distinct dates</div></div><div class="rp-item"><strong>Self-corrections / reading slips</strong><div>${totals['self-correction']} occurrences · ${datesFor('self-correction')} distinct dates</div></div><div class="rp-item"><strong>Accepted natural variations</strong><div>${totals.variation} occurrences · ${datesFor('variation')} distinct dates</div></div><div class="rp-item"><strong>Classified transcription errors</strong><div>${totals.transcription} occurrences excluded from learner pronunciation targets.</div></div></div>${confirmed.length?`<h3>Confirmed targets across lessons</h3>${renderRows(confirmed,'confirmed')}`:'<div class="rp-item">No confirmed pronunciation target has been recorded yet.</div>'}${corrections.length?`<h3>Self-correction / reading-slip patterns</h3>${renderRows(corrections,'self-correction')}`:''}${variations.length?`<h3>Accepted variation patterns</h3>${renderRows(variations,'variation')}`:''}<div class="rp-item"><strong>Teaching implication</strong><div>${confirmed.some(x=>x.dates.length>=2)?'At least one confirmed target has appeared on more than one date. Consider a short, focused contrast or retrieval activity, then collect a fresh example in a comparable task.':totals.confirmed?'Confirmed targets are currently isolated to individual dates. Recheck them in a later comparable task before treating them as recurring.':'No reviewed pronunciation target is available for focused intervention yet. Continue review rather than infer from ASR differences.'}</div><div class="rp-muted">Acceptable variation and self-correction are retained as distinct evidence types; neither is counted as a confirmed pronunciation error.</div></div></div>`;
+}
+
+
 function referenceReadingReportHTML(reps,student){
  const samples=(reps||[]).filter(r=>r.raw?.reference_reading_analysis).map(r=>({r,a:r.raw.reference_reading_analysis}));
- if(!samples.length)return '';
+ const hasPronunciationCandidates=(reps||[]).some(r=>Array.isArray(r.pronunciationCandidates||r.raw?.pronunciationCandidates)&&(r.pronunciationCandidates||r.raw?.pronunciationCandidates).length);
+ if(!samples.length)return hasPronunciationCandidates?pronunciationLearningSynthesisHTML(reps,student):'';
  const latest=samples.at(-1),a=latest.a;
- if(student){
-  const confirmed=samples.flatMap(x=>(x.a.discrepancies||[]).filter(d=>d.review_status==='reviewed'&&d.teacher_classification==='pronunciation_issue').map(d=>({...d,date:x.r.date})));
-  const goal=samples.slice().reverse().map(x=>x.r.raw?.decision_layer).find(d=>d&&d.status==='teacher_reviewed'&&d.include_in_student_report!==false&&String(d.student_facing_goal||'').trim())?.student_facing_goal;
-  return `<div class="rp-section"><h2>Reading practice</h2><div class="rp-item">${samples.length} reading sample${samples.length===1?'':'s'} recorded. Your teacher compares the passage with the transcript and checks the audio before deciding what to practise.</div>${confirmed.length?`<div class="rp-item">Your teacher has identified ${confirmed.length} pronunciation target${confirmed.length===1?'':'s'} for focused practice. These are reviewed teaching observations, not a general score of your speaking ability.</div>`:'<div class="rp-item">Your teacher is still reviewing the reading evidence. No pronunciation conclusions are presented here yet.</div>'}${goal?`<div class="rp-item"><strong>Your next goal</strong><p>${esc(goal)}</p></div>`:''}<div class="rp-muted">Word matching can be affected by speech recognition and natural spoken variation. Differences are reviewed before they become learning conclusions.</div></div>`;
- }
- const discrepancyRows=(a.discrepancies||[]).slice(0,80).map(d=>`<div class="rp-item"><strong>${esc(String(d.type||'difference').toUpperCase())}</strong> · ${esc(d.timestamp_seconds==null?'timestamp unavailable':Number(d.timestamp_seconds).toFixed(2)+' s')}<div>Reference: <strong>${esc(d.reference_word||'—')}</strong> · Transcript: <strong>${esc(d.recognized_word||'—')}</strong></div><div class="rp-muted">Review: ${esc(d.review_status||'pending')} · Teacher classification: ${esc(d.teacher_classification||'not classified')}${d.recognition_confidence==null?'':` · ASR confidence ${Number(d.recognition_confidence).toFixed(2)}`}</div>${d.teacher_note?`<div>${esc(d.teacher_note)}</div>`:''}</div>`).join('');
- return `<div class="rp-section"><h2>Reference reading analysis</h2><div class="rp-item">Source: ${esc(a.reference_title||'Reference passage')} · ${samples.length} reading sample${samples.length===1?'':'s'}</div><div class="rp-item">Reference words: ${esc(a.reference_word_count??'—')} · matched: ${esc(a.matched_word_count??'—')} · substitutions: ${esc(a.substitutions??'—')} · omissions: ${esc(a.omissions??'—')} · insertions: ${esc(a.insertions??'—')}</div><div class="rp-item">Word error rate: ${a.word_error_rate==null?'—':(Number(a.word_error_rate)*100).toFixed(1)+'%'} · This is transcript/reference discrepancy, not a pronunciation score.</div>${discrepancyRows||'<div class="rp-item">No word-level discrepancies detected.</div>'}<div class="rp-muted">Only teacher-reviewed classifications should be used as confirmed teaching observations. The transcript comparison alone cannot prove mispronunciation.</div></div>`;
+ const reviewed=samples.reduce((n,x)=>n+(x.a.discrepancies||[]).filter(d=>d.review_status==='reviewed'&&d.teacher_classification).length,0);
+ const titles=[...new Set(samples.map(x=>String(x.a.reference_title||'Reference passage')).filter(Boolean))];
+ if(student)return `<div class="rp-section"><h2>Reading practice evidence</h2><div class="rp-item">${samples.length} reading sample${samples.length===1?'':'s'} reviewed across ${new Set(samples.map(x=>x.r.date).filter(Boolean)).size} date(s)${titles.length?` · Texts: ${esc(titles.slice(0,3).join(', '))}`:''}.</div><div class="rp-item">${reviewed} word-level differences have been reviewed by your teacher. The report uses the confirmed patterns below, rather than treating every transcript difference as a pronunciation problem.</div><div class="rp-muted">Transcript alignment alone cannot prove mispronunciation. Accepted variations, self-corrections and transcription errors are kept separate.</div></div>${pronunciationLearningSynthesisHTML(reps,true)}`;
+ return `<div class="rp-section"><h2>Reference-reading evidence coverage</h2><div class="rp-item">Reading samples: ${samples.length} · distinct dates: ${new Set(samples.map(x=>x.r.date).filter(Boolean)).size} · reviewed discrepancy decisions: ${reviewed}.</div><div class="rp-item">Latest sample: ${esc(a.reference_title||'Reference passage')} · reference words: ${esc(a.reference_word_count??'—')} · word error rate: ${a.word_error_rate==null?'—':(Number(a.word_error_rate)*100).toFixed(1)+'%'}.</div><div class="rp-muted">Word error rate describes transcript/reference mismatch, not pronunciation accuracy. The reviewed synthesis below is used for teaching decisions; raw unreviewed word lists are not repeated here.</div></div>${pronunciationLearningSynthesisHTML(reps,false)}`;
 }
+
 function studentLessonHistory(student){
  const sid=String(student?.id||'');
  return Object.values(state.lessonWorkspaces||{}).filter(w=>String(w.studentId||'')===sid||norm(w.name||w.student||'')===norm(student?.name||'')||norm(masterFor(w.name||w.student||'')?.id||'')===norm(sid)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
