@@ -1243,17 +1243,24 @@ function normaliseAllCalendarEvents(events){return (events||[]).map(normaliseCal
 function syncCalendarStudents(events){
   const db=studentsDB(); let changed=false;
   (events||[]).forEach(e=>{
-    const name=(e.icsStudentEdited&&String(e.studentName||'').trim())?cleanICSStudentName(e.studentName):cleanICSStudentName(e.summary||e.studentName||'');
-    if(!name)return;
-    let s=db.find(x=>norm(x.name)===norm(name));
-    if(!s){
-      s={id:'student_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),name,classes:0,level:'',age:'',rate:null,ts:0,status:'Active',nationality:'',reason:'',goal:'',category:'Adult',tenure:'New Student',courseType:'Hybrid',notes:'',createdLocally:true,createdAt:new Date().toISOString()};
-      db.push(s); changed=true;
+    const sourceName=(e.icsStudentEdited&&String(e.studentName||'').trim())?cleanICSStudentName(e.studentName):cleanICSStudentName(e.summary||e.studentName||'');
+    if(!sourceName)return;
+    // Resolve exact canonical names first, then saved merge aliases, before ever creating a student.
+    let student=db.find(x=>norm(x.name)===norm(sourceName));
+    if(!student){
+      const resolved=typeof masterFor==='function'?masterFor(sourceName):null;
+      if(resolved)student=db.find(x=>String(x.id)===String(resolved.id))||resolved;
     }
-    e.studentId=s.id;
-    e.studentName=name;
-    e.matchKind='ics';
-    e.matchSource=name;
+    if(!student){
+      student={id:'student_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),name:sourceName,classes:0,level:'',age:'',rate:null,ts:0,status:'Active',nationality:'',reason:'',goal:'',category:'Adult',tenure:'New Student',courseType:'Hybrid',notes:'',createdLocally:true,createdAt:new Date().toISOString()};
+      db.push(student); changed=true;
+    }
+    // Keep source title for audit/debugging, but use canonical identity and display name throughout IBIS.
+    e.sourceStudentName=e.sourceStudentName||sourceName;
+    e.studentId=String(student.id);
+    e.studentName=student.name||sourceName;
+    e.matchKind=norm(sourceName)===norm(student.name)?'ics':'alias';
+    e.matchSource=sourceName;
   });
   state.studentDB=db;
   if(changed)save();
@@ -1575,6 +1582,7 @@ function ibisGoogleCompare(){
     const gId=String(ev.id||'');
     const parts=ibisGoogleEventParts(ev,cal.timeZone||'UTC');
     const name=ibisGoogleCleanName(ev.summary||'');
+    const canonicalName=canonicalStudentName(name);
     const exactUid=ics.find(x=>(gId&&String(x.googleEventId||'')===gId)||(uid&&(String(x.googleICalUID||'')===uid||String(x.uid||'')===uid)))||workspaces.find(w=>(gId&&String(w.sourceRefs?.googleEventId||'')===gId)||(uid&&String(w.sourceRefs?.googleICalUID||w.sourceRefs?.calendarUid||'')===uid));
     if(exactUid){
       const oldDate=String(exactUid.start?.date||exactUid.date||'');
@@ -1582,13 +1590,13 @@ function ibisGoogleCompare(){
       const changed=!!(oldDate&&parts.date&&oldDate!==parts.date||oldTime!==parts.time);
       return {ev,parts,name,status:changed?'Schedule changed':'Matched by calendar identity',detail:changed?('Previously '+oldDate+(oldTime?' · '+oldTime:'')+' → now '+parts.date+(parts.time?' · '+parts.time:'')+'. Lesson identity preserved; schedule update awaits approval.'):'Existing source identity found; schedule unchanged',kind:changed?'changed':'matched',existing:exactUid,oldDate,oldTime};
     }
-    const byNameDate=ics.filter(x=>ibisGoogleCleanName(x.studentName||x.summary||'')===name&&String(x.start?.date||'')===parts.date);
+    const byNameDate=ics.filter(x=>canonicalStudentName(ibisGoogleCleanName(x.studentName||x.summary||''))===canonicalName&&String(x.start?.date||'')===parts.date);
     const byNameDateTime=byNameDate.find(x=>String(x.start?.time||'')===parts.time);
     if(byNameDateTime)return {ev,parts,name,status:'Likely existing lesson',detail:'Student name, date and time match an ICS event; identity needs confirmation',kind:'candidate'};
     if(byNameDate.length)return {ev,parts,name,status:'Possible reschedule / time difference',detail:'Same student and date found, but time differs. No changes made.',kind:'review'};
     const byDateTime=ics.filter(x=>String(x.start?.date||'')===parts.date&&String(x.start?.time||'')===parts.time);
     if(byDateTime.length)return {ev,parts,name,status:'Name needs review',detail:'Date/time matches an ICS event with a different source name',kind:'review'};
-    const workspace=workspaces.find(w=>ibisGoogleCleanName(w.name||'')===name&&String(w.date||'')===parts.date&&String(w.time||'')===parts.time);
+    const workspace=workspaces.find(w=>canonicalStudentName(ibisGoogleCleanName(w.name||w.student||''))===canonicalName&&String(w.date||'')===parts.date&&String(w.time||'')===parts.time);
     if(workspace)return {ev,parts,name,status:'Existing IBIS workspace candidate',detail:'A workspace matches by name/date/time, but Google identity is not linked',kind:'candidate'};
     return {ev,parts,name,status:'New calendar event candidate',detail:'No exact existing match found. Not imported.',kind:'new'};
    });
@@ -1638,6 +1646,8 @@ function ibisGoogleApplySafeSync(){
    const previousCalendarStart=calendarRecord?{...(calendarRecord.start||{}),date:calendarRecord.start?.date||calendarRecord.date||'',time:calendarRecord.start?.time||calendarRecord.time||''}:null;
    if(calendarRecord){
     const freshRecord=ibisGoogleBuildCalendarEvent(ev,{...cal,id:cal.id||state.googleCalendarId||''});
+    const canonicalStudent=masterFor(freshRecord.studentName||calendarRecord.studentName||calendarRecord.summary||'');
+    if(canonicalStudent){calendarRecord.studentId=String(canonicalStudent.id);calendarRecord.sourceStudentName=calendarRecord.sourceStudentName||freshRecord.studentName||calendarRecord.studentName;calendarRecord.studentName=canonicalStudent.name;calendarRecord.matchKind='alias';}
     if(r.kind==='changed'){calendarRecord.start=freshRecord.start;calendarRecord.end=freshRecord.end;calendarRecord.summary=freshRecord.summary;calendarRecord.description=freshRecord.description;calendarRecord.location=freshRecord.location;calendarRecord.status=freshRecord.status;calendarRecord.studentName=calendarRecord.studentName||freshRecord.studentName;calendarRecord.googleScheduleChangedAt=new Date().toISOString();}
     calendarRecord.googleEventId=gid;calendarRecord.googleICalUID=uid;calendarRecord.googleCalendarId=cal.id||state.googleCalendarId||'';calendarRecord.googleUpdated=ev.updated||calendarRecord.googleUpdated||null;calendarRecord.lastGoogleSyncAt=new Date().toISOString();linked++;
    }
@@ -1651,6 +1661,8 @@ function ibisGoogleApplySafeSync(){
     workspace=Object.values(workspaceMap).find(w=>ibisGoogleCleanName(w.name||'')===ibisGoogleCleanName(calendarRecord.studentName||calendarRecord.summary||r.name)&&(()=>{const wd=String(w.date||'');const wdISO=/^\d{2}\/\d{2}\/\d{4}$/.test(wd)?wd.split('/').reverse().join('-'):wd;return wdISO===oldDateISO&&String(w.time||'')===oldTime;})());
    }
    if(workspace){
+    const canonicalStudent=masterFor(calendarRecord?.studentName||workspace.name||workspace.student||r.name||'');
+    if(canonicalStudent){workspace.studentId=String(canonicalStudent.id);if(workspace.name)workspace.name=canonicalStudent.name;if(workspace.student)workspace.student=canonicalStudent.name;}
     workspace.sourceRefs=workspace.sourceRefs||{};
     if(uid){workspace.sourceRefs.calendarUid=uid;workspace.sourceRefs.googleICalUID=uid;}
     if(gid)workspace.sourceRefs.googleEventId=gid;
