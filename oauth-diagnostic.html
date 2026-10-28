@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IBIS Google OAuth Diagnostic (Preview Only)</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:900px;margin:36px auto;padding:0 18px;background:#101010;color:#eee}
+h1{font-size:1.6rem} .note{padding:12px 16px;border:1px solid #777;border-radius:8px}
+button{margin:8px 8px 8px 0;padding:10px 14px;font-weight:600;cursor:pointer}
+#status{font-weight:700;color:#f0d88a} pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1c1c1c;padding:14px;border-radius:8px;min-height:140px}
+small{color:#bbb}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<h1>IBIS Google OAuth — Preview Diagnostic</h1>
+<div class="note"><strong>Safe test:</strong> this page only asks Google for a temporary access token and reports whether GIS returns success or an error. It does not read Calendar or Drive, write data, store tokens, or show token values. Use only the Google account you normally use for IBIS.</div>
+<p>GIS library: <span id="status">Loading…</span></p>
+<h2>Calendar (read-only scope)</h2>
+<button onclick="startTest('calendar','default')">Test Calendar · default GIS</button>
+<button onclick="startTest('calendar','fedcm-on')">Test Calendar · FedCM enabled</button>
+<h2>Drive (file scope)</h2>
+<button onclick="startTest('drive','default')">Test Drive · default GIS</button>
+<button onclick="startTest('drive','fedcm-on')">Test Drive · FedCM enabled</button>
+<h2>Diagnostic log</h2>
+<button onclick="document.getElementById('log').textContent=''">Clear log</button>
+<pre id="log">Waiting for GIS…</pre>
+<script>
+const CLIENTS={
+ calendar:{id:'454027589008-aev25c6snf2p5eajtonrutbhg6umhmmp.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/calendar.readonly'},
+ drive:{id:'212046941176-dsjcm6nl8rhamueli8qh19i60431rgfr.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/drive.file'}
+};
+const logEl=document.getElementById('log');
+function log(label,data){const line=new Date().toISOString()+'  '+label+(data?'  '+JSON.stringify(data):'');logEl.textContent=line+'\n'+logEl.textContent;}
+function ready(){return !!(window.google&&google.accounts&&google.accounts.oauth2)}
+function updateStatus(){document.getElementById('status').textContent=ready()?'Ready':'Not loaded yet';}
+window.addEventListener('load',()=>{updateStatus();let n=0;const timer=setInterval(()=>{updateStatus();if(ready()||++n>40)clearInterval(timer)},250);log('page-loaded',{origin:location.origin,secureContext:isSecureContext,hasOpener:!!window.opener});});
+function startTest(service,mode){
+  if(!ready()){log('blocked',{reason:'GIS library not ready',service,mode});return;}
+  const cfg=CLIENTS[service];
+  const options={client_id:cfg.id,scope:cfg.scope,callback:(r)=>{
+    if(r.error||!r.access_token){log('token-error',{service,mode,error:r.error||null,error_description:r.error_description||null,details:r.error_uri||null,keys:Object.keys(r||{})});return;}
+    log('token-success',{service,mode,hasAccessToken:true,expires_in:r.expires_in||null,scope:r.scope||null});
+  },error_callback:(e)=>{
+    log('gis-error-callback',{service,mode,type:e.type||null,message:e.message||null,keys:Object.keys(e||{})});
+  }};
+  if(mode==='fedcm-on')options.use_fedcm_for_prompt=true;
+  log('request-start',{service,mode,scope:cfg.scope,hasOpener:!!window.opener,visibility:document.visibilityState});
+  try{google.accounts.oauth2.initTokenClient(options).requestAccessToken({prompt:'consent'});}
+  catch(e){log('request-threw',{service,mode,name:e.name||null,message:e.message||String(e)});}
+}
+</script>
+</body></html>
