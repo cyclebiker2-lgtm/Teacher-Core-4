@@ -1586,41 +1586,84 @@ function importICS(file){
   const reader=new FileReader();
   reader.onerror=()=>alert('IBIS could not read the selected calendar file from the browser.');
   reader.onload=()=>{
-    const text=String(reader.result||'');
-    if(!text.trim()){alert('The selected calendar file is empty.');return}
-    let events;
-    try{events=parseICS(text)}catch(err){
+    const rawText=String(reader.result||'');
+    if(!rawText.trim()){alert('The selected calendar file is empty.');return}
+    let incoming;
+    try{incoming=normaliseAllCalendarEvents(parseICS(rawText))}catch(err){
       console.error('IBIS ICS parse error',err);
       alert('IBIS could not parse this calendar file. Please use the original .ics export.');
       return;
     }
-    if(!events.length){alert('No VEVENT calendar entries were found in this .ics file.');return}
+    if(!incoming.length){alert('No VEVENT calendar entries were found in this .ics file.');return}
+    const existing=Array.isArray(state.icsEvents)?state.icsEvents:[];
+    const oldByUid=new Map(existing.filter(e=>e.uid&&!e.isManual).map(e=>[String(e.uid),e]));
+    const seen=new Set();let duplicates=0,adds=0,updates=0,cancelled=0;
+    incoming.forEach(e=>{
+      const uid=String(e.uid||'');
+      if(seen.has(uid)){duplicates++;return} seen.add(uid);
+      const old=oldByUid.get(uid);
+      if(old)updates++;else adds++;
+      if(String(e.status||'').toUpperCase()==='CANCELLED')cancelled++;
+    });
+    const preview='ICS IMPORT PREVIEW — nothing has been changed yet.\n\nFile: '+file.name+
+      '\nEvents found: '+incoming.length+'\nNew calendar entries: '+adds+
+      '\nExisting entries matched by UID: '+updates+'\nDuplicate UIDs in file (will be ignored): '+duplicates+
+      '\nEvents marked cancelled in the source (will be flagged for review, not used to close/delete lessons): '+cancelled+
+      '\n\nSafety: existing student profiles/statuses and lesson workflow statuses will be preserved. Existing manual lessons will be retained. Continue with this import?';
+    if(!confirm(preview))return;
     try{
-      events=normaliseAllCalendarEvents(events);
-      events=syncCalendarStudents(events);
-      const manual=(state.icsEvents||[]).filter(e=>e.isManual);
-      state.icsEvents=[...events,...manual.filter(m=>!events.some(e=>norm(e.studentName||'')===norm(m.studentName||'')&&e.start?.date===m.start?.date&&String(e.start?.time||'')===String(m.start?.time||'')))];
-      state.icsMeta={rawText:text,fileName:file.name,importedAt:new Date().toISOString(),timezone:state.icsTimezone||'2'};
-      const weeks=getICSWeeks();
-      const todayKey=todayDateKey();
-      const currentWeek=weekStartKey(todayKey);
+      const uniqueIncoming=[];const appliedUids=new Set();
+      incoming.forEach(e=>{
+        const uid=String(e.uid||'');
+        if(appliedUids.has(uid))return;appliedUids.add(uid);
+        const old=oldByUid.get(uid);
+        if(old){
+          // Calendar fields refresh from ICS; IBIS-owned fields and workflow/status flags survive re-import.
+          const merged={...old,...e};
+          ['status','lessonStatus','workflowState','phase','closed','completed','cancelled','studentId','studentName','icsStudentEdited','matchKind','matchSource','sourceStudentName','isTrial','trial','lessonType','materials','notes','summaryNotes','liveLessonRecord','report','preparation','workflow','ibisStatus','recordStatus'].forEach(k=>{
+            if(Object.prototype.hasOwnProperty.call(old,k))merged[k]=old[k];
+          });
+          uniqueIncoming.push(merged);
+        }else uniqueIncoming.push(e);
+      });
+      const manual=existing.filter(e=>e.isManual);
+      const mergedEvents=[...uniqueIncoming,...manual.filter(m=>!uniqueIncoming.some(e=>norm(e.studentName||'')===norm(m.studentName||'')&&e.start?.date===m.start?.date&&String(e.start?.time||'')===String(m.start?.time||'')))];
+      // Match against the existing student database only. Import must not silently create or change student profiles/statuses.
+      const dbBefore=JSON.stringify(state.studentDB||[]);
+      const canonicalDB=studentsDB();
+      const linkedEvents=mergedEvents.map(e=>{
+        const sourceName=(e.icsStudentEdited&&String(e.studentName||'').trim())?cleanICSStudentName(e.studentName):cleanICSStudentName(e.summary||e.studentName||'');
+        if(!sourceName)return e;
+        let student=canonicalDB.find(x=>norm(x.name)===norm(sourceName));
+        if(!student){const resolved=typeof masterFor==='function'?masterFor(sourceName):null;if(resolved)student=canonicalDB.find(x=>String(x.id)===String(resolved.id))||resolved;}
+        if(student){e.sourceStudentName=e.sourceStudentName||sourceName;e.studentId=String(student.id);e.studentName=student.name||sourceName;e.matchKind=norm(sourceName)===norm(student.name)?'ics':'alias';e.matchSource=sourceName;}
+        else {delete e.studentId;e.matchKind='candidate';e.matchSource=sourceName;}
+        return e;
+      });
+      state.icsEvents=linkedEvents;
+      state.studentDB=canonicalDB;
+      // Guard against import code mutating student records during reconciliation.
+      if(dbBefore!=='undefined'&&dbBefore!=='[]'&&Array.isArray(state.studentDB)){
+        const original=JSON.parse(dbBefore);
+        if(original.length)state.studentDB=original;
+      }
+      state.icsMeta={rawText,fileName:file.name,importedAt:new Date().toISOString(),timezone:state.icsTimezone||'2'};
+      const weeks=getICSWeeks();const todayKey=todayDateKey();const currentWeek=weekStartKey(todayKey);
       state.selectedICSWeek=weeks.includes(currentWeek)?currentWeek:(weeks[0]||'all');
-      state.lessonTableWeek='calendar';const wf=document.getElementById('weekFilter'); if(wf) wf.value='calendar';
-      refreshICSWeekSelector();
-      save();
+      state.lessonTableWeek='calendar';const wf=document.getElementById('weekFilter');if(wf)wf.value='calendar';
+      refreshICSWeekSelector();save();
     }catch(err){
       console.error('IBIS calendar storage/normalisation error',err);
-      alert('The calendar was read, but IBIS could not store the imported lessons. Your original calendar file has not been changed.');
+      alert('The calendar was read, but IBIS could not store the imported lessons. Please do not retry repeatedly; your original .ics file remains unchanged.');
       return;
     }
     try{
       renderAll();
       const msg=document.getElementById('icsMessage');
-      if(msg)msg.textContent=`Imported ${events.length} calendar events from ${file.name}. Times are displayed at GMT+${state.icsTimezone||'2'} using the fixed manual offset.`;
+      if(msg)msg.textContent='Imported '+incoming.length+' calendar events from '+file.name+'. Existing lesson/student statuses were preserved; unmatched student names are flagged for review, not auto-created. Times use GMT+'+(state.icsTimezone||'2')+'.';
     }catch(err){
       console.error('IBIS calendar display error after import',err);
-      const msg=document.getElementById('icsMessage');
-      if(msg)msg.textContent=`Imported ${events.length} calendar events, but the display needs refreshing.`;
+      const msg=document.getElementById('icsMessage');if(msg)msg.textContent='Imported calendar entries, but the display needs refreshing.';
     }
   };
   reader.readAsText(file);
