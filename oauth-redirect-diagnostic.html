@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IBIS OAuth Redirect Diagnostic (Preview Only)</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:850px;margin:36px auto;padding:0 18px;background:#101010;color:#eee}
+h1{font-size:1.55rem}.note{padding:12px 16px;border:1px solid #777;border-radius:8px}
+button{margin:8px 8px 8px 0;padding:10px 14px;font-weight:600;cursor:pointer}
+#status{font-weight:700;color:#f0d88a}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1c1c1c;padding:14px;border-radius:8px;min-height:140px}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<h1>IBIS OAuth — Redirect Diagnostic</h1>
+<div class="note"><strong>Preview-only test.</strong> This page tests whether Google can return an authorization code by a full-page redirect rather than a popup. It does not exchange the code, call Google APIs, read Calendar/Drive data, or store the code. On return, it checks that a code is present, then immediately removes query parameters from the address bar. Do not use this page as production OAuth implementation.</div>
+<p>GIS library: <span id="status">Loading…</span></p>
+<p><strong>Redirect URI to authorize if needed:</strong><br><code id="redirectUri"></code></p>
+<button id="test" disabled>Test Calendar · redirect authorization</button>
+<h2>Diagnostic log</h2>
+<button id="clear">Clear log</button>
+<pre id="log">Waiting for GIS…</pre>
+<script>
+const CLIENT_ID='454027589008-aev25c6snf2p5eajtonrutbhg6umhmmp.apps.googleusercontent.com';
+const SCOPE='https://www.googleapis.com/auth/calendar.readonly';
+const logEl=document.getElementById('log');
+const redirectUri=location.origin+location.pathname;
+document.getElementById('redirectUri').textContent=redirectUri;
+function log(label,data){logEl.textContent=new Date().toISOString()+'  '+label+(data?'  '+JSON.stringify(data):'')+'\n'+logEl.textContent;}
+function ready(){return !!(window.google&&google.accounts&&google.accounts.oauth2)}
+function updateStatus(){document.getElementById('status').textContent=ready()?'Ready':'Not loaded yet';document.getElementById('test').disabled=!ready();}
+function randomState(){const bytes=new Uint8Array(24);crypto.getRandomValues(bytes);return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');}
+function inspectReturn(){
+ const params=new URLSearchParams(location.search);
+ const code=params.get('code');
+ const error=params.get('error');
+ const returnedState=params.get('state');
+ const expectedState=sessionStorage.getItem('ibis_oauth_redirect_state');
+ if(code||error||returnedState){
+   history.replaceState(null,document.title,location.pathname);
+   if(!expectedState){log('return-unverified',{reason:'No matching state was stored in this tab',codeReceived:!!code,error:error||null});}
+   else if(returnedState!==expectedState){log('return-state-mismatch',{codeReceived:!!code,error:error||null});}
+   else if(error){log('google-returned-error',{error});}
+   else if(code){log('redirect-code-received',{stateValidated:true,codeReceived:true,codeStored:false,codeLogged:false,tokenExchange:false});}
+   else{log('redirect-return-without-code',{stateValidated:true});}
+   sessionStorage.removeItem('ibis_oauth_redirect_state');
+   return true;
+ }
+ return false;
+}
+document.getElementById('test').addEventListener('click',()=>{
+ if(!ready()){log('blocked',{reason:'Google Identity Services library is not ready'});return;}
+ const state=randomState();
+ sessionStorage.setItem('ibis_oauth_redirect_state',state);
+ log('redirect-start',{scope:SCOPE,redirectUri,codeStored:false});
+ try{
+  const client=google.accounts.oauth2.initCodeClient({
+   client_id:CLIENT_ID,
+   scope:SCOPE,
+   ux_mode:'redirect',
+   redirect_uri:redirectUri,
+   state
+  });
+  client.requestCode();
+ }catch(e){
+  sessionStorage.removeItem('ibis_oauth_redirect_state');
+  log('request-threw',{name:e.name||null,message:e.message||String(e)});
+ }
+});
+document.getElementById('clear').addEventListener('click',()=>logEl.textContent='');
+window.addEventListener('load',()=>{
+ updateStatus();
+ let n=0;const timer=setInterval(()=>{updateStatus();if(ready()||++n>40)clearInterval(timer)},250);
+ log('page-loaded',{origin:location.origin,redirectUri});
+ inspectReturn();
+});
+</script>
+</body>
+</html>
