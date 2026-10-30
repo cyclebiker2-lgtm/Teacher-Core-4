@@ -2,7 +2,12 @@ const CLIENTS = {
   calendar: {
     clientId: '454027589008-aev25c6snf2p5eajtonrutbhg6umhmmp.apps.googleusercontent.com',
     scope: 'https://www.googleapis.com/auth/calendar.readonly',
-    secretName: 'CALENDAR_CLIENT_SECRET',
+    secretName: 'CALENDAR_CLIENT_SECRET_PREVIEW',
+  },
+  drive: {
+    clientId: '212046941176-dsjcm6nl8rhamueli8qh19i60431rgfr.apps.googleusercontent.com',
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    secretName: 'GOOGLE_CLIENT_SECRET_PREVIEW',
   },
 };
 
