@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IBIS Google OAuth Code Flow · Preview</title>
+<title>IBIS Google OAuth Redirect Code Flow · Preview</title>
 <style>
 :root{color-scheme:dark}body{font:16px/1.5 system-ui,sans-serif;max-width:850px;margin:36px auto;padding:0 18px;background:#101010;color:#eee}h1{font-size:1.55rem}.note{padding:12px 16px;border:1px solid #777;border-radius:8px}button{margin:8px 8px 8px 0;padding:10px 14px;font-weight:600;cursor:pointer}button:disabled{opacity:.5;cursor:wait}#status{font-weight:700;color:#f0d88a}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1c1c1c;padding:14px;border-radius:8px;min-height:180px}
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-<h1>IBIS Google OAuth · Code Flow Preview</h1>
-<div class="note"><strong>Preview-only diagnostic.</strong> These checks test whether Google’s authorization-code popup returns a code and whether the server can exchange it. Calendar requests read-only access; Drive requests the limited <code>drive.file</code> scope. Authorization codes and tokens are never displayed, stored, or logged. The server returns only success, granted scope, and expiry metadata. No Calendar or Drive API calls or data changes are made.</div>
+<h1>IBIS Google OAuth · Redirect Code Flow Preview</h1>
+<div class="note"><strong>Preview-only diagnostic.</strong> This test uses Google’s full-page authorization-code redirect and exchanges the code on the server. Calendar requests read-only access; Drive requests the limited <code>drive.file</code> scope. State is checked, the code is removed from the address bar before exchange, and codes/tokens are never displayed, stored, or logged. The server returns only success, granted scope, and expiry metadata. No Calendar or Drive API calls or workspace changes are made.</div>
 <p>Google Identity Services: <span id="status">Loading…</span></p>
-<p><strong>Preview origin:</strong> <code id="origin"></code></p>
+<p><strong>Preview redirect URI:</strong> <code id="redirect-uri"></code></p>
 <h2>Calendar</h2>
-<button id="calendar-test" disabled>Test Calendar code flow</button>
+<button id="calendar-test" disabled>Test Calendar redirect code flow</button>
 <h2>Drive</h2>
-<button id="drive-test" disabled>Test Drive code flow</button>
+<button id="drive-test" disabled>Test Drive redirect code flow</button>
 <h2>Diagnostic log</h2>
 <button id="clear">Clear log</button>
 <pre id="log">Waiting for Google Identity Services…</pre>
@@ -32,33 +32,26 @@ const CLIENTS={
     scope:'https://www.googleapis.com/auth/drive.file'
   }
 };
+const STATE_KEY='ibis_oauth_redirect_state_v1';
+const SERVICE_KEY='ibis_oauth_redirect_service_v1';
 const logEl=document.getElementById('log');
 const buttons={
   calendar:document.getElementById('calendar-test'),
   drive:document.getElementById('drive-test')
 };
-document.getElementById('origin').textContent=location.origin;
+const redirectUri=location.origin+location.pathname;
+document.getElementById('redirect-uri').textContent=redirectUri;
 function log(event,data){logEl.textContent=new Date().toISOString()+'  '+event+(data?'  '+JSON.stringify(data):'')+'\n'+logEl.textContent;}
 function isGISReady(){return !!(window.google&&google.accounts&&google.accounts.oauth2);}
 function updateStatus(){document.getElementById('status').textContent=isGISReady()?'Ready':'Loading…';for(const button of Object.values(buttons))button.disabled=!isGISReady();}
-window.addEventListener('load',()=>{
-  updateStatus();
-  const timer=setInterval(()=>{updateStatus();if(isGISReady())clearInterval(timer)},250);
-  log('page-loaded',{origin:location.origin});
-});
 function setButtonsDisabled(value){for(const button of Object.values(buttons))button.disabled=value||!isGISReady();}
-async function exchangeCode(service,response){
-  if(response.error||!response.code){
-    log('code-response-error',{service,error:response.error||'code_missing'});
-    setButtonsDisabled(false);
-    return;
-  }
-  log('code-received',{service,hasCode:true,codeLogged:false});
+function randomState(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');}
+async function exchangeCode(service,code){
   try{
     const result=await fetch('/api/oauth-code-exchange',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-Requested-With':'XmlHttpRequest'},
-      body:JSON.stringify({service,code:response.code}),
+      body:JSON.stringify({service,code,redirectUri}),
       cache:'no-store',
       credentials:'same-origin'
     });
@@ -78,23 +71,54 @@ async function exchangeCode(service,response){
     setButtonsDisabled(false);
   }
 }
+function inspectRedirectReturn(){
+  const params=new URLSearchParams(location.search);
+  const code=params.get('code');
+  const error=params.get('error');
+  const returnedState=params.get('state');
+  if(!code&&!error&&!returnedState)return;
+  history.replaceState(null,document.title,location.pathname);
+  const expectedState=sessionStorage.getItem(STATE_KEY);
+  const service=sessionStorage.getItem(SERVICE_KEY);
+  sessionStorage.removeItem(STATE_KEY);
+  sessionStorage.removeItem(SERVICE_KEY);
+  if(!expectedState||!service||returnedState!==expectedState||!CLIENTS[service]){
+    log('redirect-return-rejected',{reason:'state_or_service_mismatch',codeReceived:!!code,error:error||null});
+    return;
+  }
+  if(error||!code){
+    log('redirect-return-error',{service,error:error||'code_missing'});
+    return;
+  }
+  setButtonsDisabled(true);
+  log('redirect-code-received',{service,stateValidated:true,codeReceived:true,codeStored:false,codeLogged:false,urlCleaned:true});
+  exchangeCode(service,code);
+}
+window.addEventListener('load',()=>{
+  updateStatus();
+  const timer=setInterval(()=>{updateStatus();if(isGISReady())clearInterval(timer)},250);
+  inspectRedirectReturn();
+  log('page-loaded',{origin:location.origin,redirectUri});
+});
 function runTest(service){
   if(!isGISReady()){log('blocked',{service,reason:'gis_not_ready'});return;}
+  const state=randomState();
+  sessionStorage.setItem(STATE_KEY,state);
+  sessionStorage.setItem(SERVICE_KEY,service);
   setButtonsDisabled(true);
-  log('request-start',{service,scope:CLIENTS[service].scope,uxMode:'popup'});
+  log('redirect-start',{service,scope:CLIENTS[service].scope,stateStored:true,codeStored:false});
   try{
     const client=google.accounts.oauth2.initCodeClient({
       client_id:CLIENTS[service].id,
       scope:CLIENTS[service].scope,
-      ux_mode:'popup',
-      callback:response=>exchangeCode(service,response),
-      error_callback:error=>{
-        log('gis-error-callback',{service,type:error?.type||'unknown'});
-        setButtonsDisabled(false);
-      }
+      ux_mode:'redirect',
+      redirect_uri:redirectUri,
+      state
     });
     client.requestCode();
   }catch(_){
+    sessionStorage.removeItem(STATE_KEY);
+    sessionStorage.removeItem(SERVICE_KEY);
     log('request-failed',{service,reason:'client_initialization_or_request_error'});
     setButtonsDisabled(false);
   }
