@@ -11,6 +11,8 @@ const CLIENTS = {
   },
 };
 
+const PREVIEW_REDIRECT_PATH = '/oauth-code-flow-preview.html';
+
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -42,8 +44,10 @@ module.exports = async function handler(req, res) {
 
   const service = String(body?.service || '');
   const code = typeof body?.code === 'string' ? body.code : '';
+  const redirectUri = typeof body?.redirectUri === 'string' ? body.redirectUri : '';
   const config = CLIENTS[service];
-  if (!config || !code || code.length > 4096) {
+  const expectedRedirectUri = origin + PREVIEW_REDIRECT_PATH;
+  if (!config || !code || code.length > 4096 || redirectUri !== expectedRedirectUri) {
     return res.status(400).json({ ok: false, error: 'invalid_request' });
   }
 
@@ -57,7 +61,7 @@ module.exports = async function handler(req, res) {
       code,
       client_id: config.clientId,
       client_secret: clientSecret,
-      redirect_uri: origin,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     });
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
