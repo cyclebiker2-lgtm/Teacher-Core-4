@@ -11,7 +11,7 @@ const CLIENTS = {
   },
 };
 
-const PREVIEW_REDIRECT_PATH = '/oauth-code-flow-preview.html';
+const PREVIEW_REDIRECT_PATHS = new Set(['/', '/oauth-code-flow-preview.html']);
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
@@ -46,8 +46,10 @@ module.exports = async function handler(req, res) {
   const code = typeof body?.code === 'string' ? body.code : '';
   const redirectUri = typeof body?.redirectUri === 'string' ? body.redirectUri : '';
   const config = CLIENTS[service];
-  const expectedRedirectUri = origin + PREVIEW_REDIRECT_PATH;
-  if (!config || !code || code.length > 4096 || redirectUri !== expectedRedirectUri) {
+  const redirectPath = PREVIEW_REDIRECT_PATHS.has('/') && redirectUri === origin + '/' ? '/' :
+    (redirectUri === origin + '/oauth-code-flow-preview.html' ? '/oauth-code-flow-preview.html' : '');
+  const expectedRedirectUri = redirectPath ? origin + redirectPath : '';
+  if (!config || !code || code.length > 4096 || !expectedRedirectUri || redirectUri !== expectedRedirectUri) {
     return res.status(400).json({ ok: false, error: 'invalid_request' });
   }
 
@@ -82,6 +84,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       tokenReceived: true,
+      accessToken: tokenData.access_token,
       expiresIn: Number(tokenData.expires_in) || null,
       scope: tokenData.scope || config.scope,
     });
