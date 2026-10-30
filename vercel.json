@@ -1,0 +1,13 @@
+{
+  "headers": [
+    {
+      "source": "/oauth-code-flow-preview.html",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        }
+      ]
+    }
+  ]
+}
